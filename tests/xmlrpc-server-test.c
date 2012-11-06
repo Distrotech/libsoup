@@ -325,19 +325,19 @@ main (int argc, char **argv)
 
 	test_init (argc, argv, no_test_entry);
 
-	server = soup_test_server_new (FALSE);
+	server = soup_test_server_new (SOUP_TEST_SERVER_DEFAULT);
 	soup_server_add_handler (server, "/xmlrpc-server.php",
 				 server_callback, NULL, NULL);
 
 	loop = g_main_loop_new (NULL, TRUE);
 
-	if (run_tests) {
-		uri = soup_uri_new ("http://127.0.0.1/xmlrpc-server.php");
-		soup_uri_set_port (uri, soup_server_get_port (server));
+	uri = soup_test_server_get_uri (server, "http", NULL);
+	soup_uri_set_path (uri, "/xmlrpc-server.php");
+	if (run_tests)
 		do_xmlrpc_tests (uri);
-		soup_uri_free (uri);
-	} else
-		g_print ("Listening on port %d\n", soup_server_get_port (server));
+	else
+		g_print ("Listening on port %d\n", uri->port);
+	soup_uri_free (uri);
 
 	g_main_loop_run (loop);
 	g_main_loop_unref (loop);

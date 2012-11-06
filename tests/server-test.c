@@ -5,7 +5,7 @@
 
 #include "test-utils.h"
 
-SoupServer *server, *ssl_server;
+SoupServer *server;
 SoupURI *base_uri, *ssl_base_uri;
 
 static void
@@ -255,6 +255,7 @@ ipv6_server_callback (SoupServer *server, SoupMessage *msg,
 		      SoupClientContext *context, gpointer data)
 {
 	const char *host;
+	GSocketAddress *addr;
 	char expected_host[128];
 
 	host = soup_message_headers_get_one (msg->request_headers, "Host");
@@ -265,8 +266,10 @@ ipv6_server_callback (SoupServer *server, SoupMessage *msg,
 		return;
 	}
 
+	addr = soup_client_context_get_local_address (context);
 	g_snprintf (expected_host, sizeof (expected_host),
-		    "[::1]:%d", soup_server_get_port (server));
+		    "[::1]:%d",
+		    g_inet_socket_address_get_port (G_INET_SOCKET_ADDRESS (addr)));
 
 	if (strcmp (host, expected_host) == 0)
 		soup_message_set_status (msg, SOUP_STATUS_OK);
@@ -282,27 +285,16 @@ do_ipv6_test (void)
 {
 	SoupServer *ipv6_server;
 	SoupURI *ipv6_uri;
-	SoupAddress *ipv6_addr;
 	SoupSession *session;
 	SoupMessage *msg;
 
+	// FIXME: deal with lack of IPv6 support
+
 	debug_printf (1, "\nIPv6 server test\n");
 
-	ipv6_addr = soup_address_new ("::1", SOUP_ADDRESS_ANY_PORT);
-	soup_address_resolve_sync (ipv6_addr, NULL);
-	ipv6_server = soup_server_new (SOUP_SERVER_INTERFACE, ipv6_addr,
-				       NULL);
-	g_object_unref (ipv6_addr);
-	if (!ipv6_server) {
-		debug_printf (1, "  skipping due to lack of IPv6 support\n");
-		return;
-	}
-
+	ipv6_server = soup_test_server_new (SOUP_TEST_SERVER_DEFAULT);
 	soup_server_add_handler (ipv6_server, NULL, ipv6_server_callback, NULL, NULL);
-	soup_server_run_async (ipv6_server);
-
-	ipv6_uri = soup_uri_new ("http://[::1]/");
-	soup_uri_set_port (ipv6_uri, soup_server_get_port (ipv6_server));
+	ipv6_uri = soup_test_server_get_uri (server, "http", "::1");
 
 	session = soup_test_session_new (SOUP_TYPE_SESSION_ASYNC, NULL);
 
@@ -340,21 +332,17 @@ main (int argc, char **argv)
 
 	test_init (argc, argv, NULL);
 
-	server = soup_test_server_new (TRUE);
+	server = soup_test_server_new (SOUP_TEST_SERVER_IN_THREAD);
 	soup_server_add_handler (server, NULL, server_callback, NULL, NULL);
-	base_uri = soup_uri_new ("http://127.0.0.1/");
-	soup_uri_set_port (base_uri, soup_server_get_port (server));
+	base_uri = soup_test_server_get_uri (server, "http", NULL);
 
 	g_object_set (G_OBJECT (server),
 		      SOUP_SERVER_HTTP_ALIASES, http_aliases,
 		      NULL);
 
 	if (tls_available) {
-		ssl_server = soup_test_server_new_ssl (TRUE);
-		soup_server_add_handler (ssl_server, NULL, server_callback, NULL, NULL);
-		ssl_base_uri = soup_uri_new ("https://127.0.0.1/");
-		soup_uri_set_port (ssl_base_uri, soup_server_get_port (ssl_server));
-		g_object_set (G_OBJECT (ssl_server),
+		ssl_base_uri = soup_test_server_get_uri (server, "https", NULL);
+		g_object_set (G_OBJECT (server),
 			      SOUP_SERVER_HTTPS_ALIASES, https_aliases,
 			      NULL);
 	}
@@ -367,10 +355,8 @@ main (int argc, char **argv)
 	soup_uri_free (base_uri);
 	soup_test_server_quit_unref (server);
 
-	if (tls_available) {
+	if (tls_available)
 		soup_uri_free (ssl_base_uri);
-		soup_test_server_quit_unref (ssl_server);
-	}
 
 	test_cleanup ();
 	return errors != 0;

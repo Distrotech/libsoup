@@ -10,7 +10,7 @@
 
 #define MAX_POST_LENGTH (sizeof (SHORT_BODY))
 
-static int port;
+static SoupURI *base_uri;
 static GSList *events;
 
 static void
@@ -54,24 +54,27 @@ do_message (const char *path, gboolean long_body,
 	SoupSession *session;
 	SoupMessage *msg;
 	const char *body;
-	char *uri;
+	SoupURI *uri;
 	va_list ap;
 	const char *expected_event;
 	char *actual_event;
 	int expected_status, actual_status;
 	static int count = 1;
 
-	debug_printf (1, "%d. /%s, %s body, %sExpect, %s password\n",
+	debug_printf (1, "%d. %s, %s body, %sExpect, %s password\n",
 		      count++, path,
 		      long_body ? "long" : "short",
 		      expect_continue ? "" : "no ",
 		      auth ? "with" : "without");
 
-	uri = g_strdup_printf ("http://%s127.0.0.1:%d/%s",
-			       auth ? "user:pass@" : "",
-			       port, path);
-	msg = soup_message_new ("POST", uri);
-	g_free (uri);
+	uri = soup_uri_copy (base_uri);
+	if (auth) {
+		soup_uri_set_user (uri, "user");
+		soup_uri_set_password (uri, "pass");
+	}
+	soup_uri_set_path (uri, path);
+	msg = soup_message_new_from_uri ("POST", uri);
+	soup_uri_free (uri);
 
 	body = long_body ? LONG_BODY : SHORT_BODY;
 	soup_message_set_request (msg, "text/plain", SOUP_MEMORY_STATIC,
@@ -159,7 +162,7 @@ do_message (const char *path, gboolean long_body,
 static void
 run_tests (void)
 {
-	do_message ("unauth", FALSE, FALSE, FALSE,
+	do_message ("/unauth", FALSE, FALSE, FALSE,
 		    "client-wrote_headers",
 		    "client-wrote_body",
 		    "server-got_headers",
@@ -171,7 +174,7 @@ run_tests (void)
 		    "client-got_body",
 		    "client-finished",
 		    NULL);
-	do_message ("unauth", TRUE, FALSE, FALSE,
+	do_message ("/unauth", TRUE, FALSE, FALSE,
 		    "client-wrote_headers",
 		    "client-wrote_body",
 		    "server-got_headers",
@@ -183,7 +186,7 @@ run_tests (void)
 		    "client-got_body",
 		    "client-finished",
 		    NULL);
-	do_message ("unauth", FALSE, TRUE, FALSE,
+	do_message ("/unauth", FALSE, TRUE, FALSE,
 		    "client-wrote_headers",
 		    "server-got_headers",
 		    "server-wrote_informational", SOUP_STATUS_CONTINUE,
@@ -197,7 +200,7 @@ run_tests (void)
 		    "client-got_body",
 		    "client-finished",
 		    NULL);
-	do_message ("unauth", TRUE, TRUE, FALSE,
+	do_message ("/unauth", TRUE, TRUE, FALSE,
 		    "client-wrote_headers",
 		    "server-got_headers",
 		    "server-wrote_headers", SOUP_STATUS_REQUEST_ENTITY_TOO_LARGE,
@@ -208,7 +211,7 @@ run_tests (void)
 		    "client-finished",
 		    NULL);
 
-	do_message ("auth", FALSE, FALSE, FALSE,
+	do_message ("/auth", FALSE, FALSE, FALSE,
 		    "client-wrote_headers",
 		    "client-wrote_body",
 		    "server-got_headers",
@@ -220,7 +223,7 @@ run_tests (void)
 		    "client-got_body",
 		    "client-finished",
 		    NULL);
-	do_message ("auth", TRUE, FALSE, FALSE,
+	do_message ("/auth", TRUE, FALSE, FALSE,
 		    "client-wrote_headers",
 		    "client-wrote_body",
 		    "server-got_headers",
@@ -232,7 +235,7 @@ run_tests (void)
 		    "client-got_body",
 		    "client-finished",
 		    NULL);
-	do_message ("auth", FALSE, TRUE, FALSE,
+	do_message ("/auth", FALSE, TRUE, FALSE,
 		    "client-wrote_headers",
 		    "server-got_headers",
 		    "server-wrote_headers", SOUP_STATUS_UNAUTHORIZED,
@@ -242,7 +245,7 @@ run_tests (void)
 		    "client-got_body",
 		    "client-finished",
 		    NULL);
-	do_message ("auth", TRUE, TRUE, FALSE,
+	do_message ("/auth", TRUE, TRUE, FALSE,
 		    "client-wrote_headers",
 		    "server-got_headers",
 		    "server-wrote_headers", SOUP_STATUS_UNAUTHORIZED,
@@ -253,7 +256,7 @@ run_tests (void)
 		    "client-finished",
 		    NULL);
 
-	do_message ("auth", FALSE, FALSE, TRUE,
+	do_message ("/auth", FALSE, FALSE, TRUE,
 		    "client-wrote_headers",
 		    "client-wrote_body",
 		    "server-got_headers",
@@ -274,7 +277,7 @@ run_tests (void)
 		    "client-got_body",
 		    "client-finished",
 		    NULL);
-	do_message ("auth", TRUE, FALSE, TRUE,
+	do_message ("/auth", TRUE, FALSE, TRUE,
 		    "client-wrote_headers",
 		    "client-wrote_body",
 		    "server-got_headers",
@@ -295,7 +298,7 @@ run_tests (void)
 		    "client-got_body",
 		    "client-finished",
 		    NULL);
-	do_message ("auth", FALSE, TRUE, TRUE,
+	do_message ("/auth", FALSE, TRUE, TRUE,
 		    "client-wrote_headers",
 		    "server-got_headers",
 		    "server-wrote_headers", SOUP_STATUS_UNAUTHORIZED,
@@ -316,7 +319,7 @@ run_tests (void)
 		    "client-got_body",
 		    "client-finished",
 		    NULL);
-	do_message ("auth", TRUE, TRUE, TRUE,
+	do_message ("/auth", TRUE, TRUE, TRUE,
 		    "client-wrote_headers",
 		    "server-got_headers",
 		    "server-wrote_headers", SOUP_STATUS_UNAUTHORIZED,
@@ -410,7 +413,7 @@ setup_server (void)
 	SoupServer *server;
 	SoupAuthDomain *auth_domain;
 
-	server = soup_test_server_new (FALSE);
+	server = soup_test_server_new (SOUP_TEST_SERVER_DEFAULT);
 
 	g_signal_connect (server, "request-started",
 			  G_CALLBACK (request_started), NULL);
@@ -438,11 +441,13 @@ main (int argc, char **argv)
 	test_init (argc, argv, NULL);
 
 	server = setup_server ();
-	port = soup_server_get_port (server);
+	base_uri = soup_test_server_get_uri (server, "http", NULL);
 
 	run_tests ();
 
 	soup_test_server_quit_unref (server);
+	soup_uri_free (base_uri);
+
 	test_cleanup ();
 	return errors != 0;
 }

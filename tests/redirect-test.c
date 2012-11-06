@@ -564,37 +564,36 @@ main (int argc, char **argv)
 {
 	GMainLoop *loop;
 	SoupServer *server, *server2;
-	guint port;
-	SoupURI *base_uri;
+	SoupURI *base_uri, *uri2;
 
 	test_init (argc, argv, no_test_entry);
 
-	server = soup_test_server_new (TRUE);
+	server = soup_test_server_new (SOUP_TEST_SERVER_IN_THREAD);
 	soup_server_add_handler (server, NULL,
 				 server_callback, NULL, NULL);
-	port = soup_server_get_port (server);
+	base_uri = soup_test_server_get_uri (server, "http", NULL);
 
-	server2 = soup_test_server_new (TRUE);
+	server2 = soup_test_server_new (SOUP_TEST_SERVER_IN_THREAD);
 	soup_server_add_handler (server2, NULL,
 				 server2_callback, NULL, NULL);
-	server2_uri = g_strdup_printf ("http://127.0.0.1:%d/on-server2",
-				       soup_server_get_port (server2));
+	uri2 = soup_test_server_get_uri (server2, "http", NULL);
+	soup_uri_set_path (uri2, "/on-server2");
+	server2_uri = soup_uri_to_string (uri2, FALSE);
+	soup_uri_free (uri2);
 
 	loop = g_main_loop_new (NULL, TRUE);
 
 	if (run_tests) {
-		base_uri = soup_uri_new ("http://127.0.0.1");
-		soup_uri_set_port (base_uri, port);
 		do_redirect_tests (base_uri);
 		do_connection_test (base_uri);
-		soup_uri_free (base_uri);
 	} else {
-		g_print ("Listening on port %d\n", port);
+		g_print ("Listening on port %d\n", base_uri->port);
 		g_main_loop_run (loop);
 	}
 
 	g_main_loop_unref (loop);
 	g_free (server2_uri);
+	soup_uri_free (base_uri);
 	soup_test_server_quit_unref (server);
 	soup_test_server_quit_unref (server2);
 

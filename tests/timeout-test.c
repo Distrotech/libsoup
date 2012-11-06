@@ -20,7 +20,7 @@ request_started_cb (SoupSession *session, SoupMessage *msg,
 }
 
 static void
-do_message_to_session (SoupSession *session, const char *uri,
+do_message_to_session (SoupSession *session, SoupURI *uri,
 		       const char *comment, guint expected_status)
 {
 	SoupMessage *msg;
@@ -28,7 +28,7 @@ do_message_to_session (SoupSession *session, const char *uri,
 
 	if (comment)
 		debug_printf (1, "    msg %s\n", comment);
-	msg = soup_message_new ("GET", uri);
+	msg = soup_message_new_from_uri ("GET", uri);
 
 	g_signal_connect (msg, "finished",
 			  G_CALLBACK (message_finished), &finished);
@@ -63,7 +63,7 @@ static void
 do_msg_tests_for_session (SoupSession *timeout_session,
 			  SoupSession *idle_session,
 			  SoupSession *plain_session,
-			  char *fast_uri, char *slow_uri)
+			  SoupURI *fast_uri, SoupURI *slow_uri)
 {
 	SoupSocket *ret, *idle_first, *idle_second;
 	SoupSocket *plain_first, *plain_second;
@@ -115,7 +115,7 @@ do_msg_tests_for_session (SoupSession *timeout_session,
 }
 
 static void
-do_request_to_session (SoupSession *session, const char *uri,
+do_request_to_session (SoupSession *session, SoupURI *uri,
 		       const char *comment, gboolean expect_timeout)
 {
 	SoupRequest *req;
@@ -125,7 +125,7 @@ do_request_to_session (SoupSession *session, const char *uri,
 	gboolean finished = FALSE;
 
 	debug_printf (1, "    req %s\n", comment);
-	req = soup_session_request (session, uri, NULL);
+	req = soup_session_request_uri (session, uri, NULL);
 	msg = soup_request_http_get_message (SOUP_REQUEST_HTTP (req));
 
 	g_signal_connect (msg, "finished",
@@ -189,7 +189,7 @@ static void
 do_req_tests_for_session (SoupSession *timeout_session,
 			  SoupSession *idle_session,
 			  SoupSession *plain_session,
-			  char *fast_uri, char *slow_uri)
+			  SoupURI *fast_uri, SoupURI *slow_uri)
 {
 	SoupSocket *ret, *idle_first, *idle_second;
 	SoupSocket *plain_first, *plain_second;
@@ -243,7 +243,7 @@ do_req_tests_for_session (SoupSession *timeout_session,
 }
 
 static void
-do_timeout_tests (char *fast_uri, char *slow_uri, gboolean extra_slow)
+do_timeout_tests (SoupURI *fast_uri, SoupURI *slow_uri, gboolean extra_slow)
 {
 	SoupSession *timeout_session, *idle_session, *plain_session;
 
@@ -311,7 +311,7 @@ server_handler (SoupServer        *server,
 	if (!strcmp (path, "/slow")) {
 		soup_server_pause_message (server, msg);
 		g_object_set_data (G_OBJECT (msg), "server", server);
-		soup_add_timeout (soup_server_get_async_context (server),
+		soup_add_timeout (g_main_context_get_thread_default (),
 				  4000, timeout_finish_message, msg);
 	}
 }
@@ -320,21 +320,19 @@ int
 main (int argc, char **argv)
 {
 	SoupServer *server;
-	char *fast_uri, *slow_uri;
+	SoupURI *fast_uri, *slow_uri;
 
 	test_init (argc, argv, NULL);
 
 	debug_printf (1, "http\n");
-	server = soup_test_server_new (TRUE);
+	server = soup_test_server_new (SOUP_TEST_SERVER_IN_THREAD);
 	soup_server_add_handler (server, NULL, server_handler, NULL, NULL);
-	fast_uri = g_strdup_printf ("http://127.0.0.1:%u/",
-				    soup_server_get_port (server));
-	slow_uri = g_strdup_printf ("http://127.0.0.1:%u/slow",
-				    soup_server_get_port (server));
+
+	fast_uri = soup_test_server_get_uri (server, "http", NULL);
+	slow_uri = soup_uri_new_with_base (fast_uri, "/slow");
 	do_timeout_tests (fast_uri, slow_uri, FALSE);
-	g_free (fast_uri);
-	g_free (slow_uri);
-	soup_test_server_quit_unref (server);
+	soup_uri_free (fast_uri);
+	soup_uri_free (slow_uri);
 
 	if (tls_available) {
 		SoupSession *test_session;
@@ -342,12 +340,8 @@ main (int argc, char **argv)
 		gint64 start, end;
 
 		debug_printf (1, "\nhttps\n");
-		server = soup_test_server_new_ssl (TRUE);
-		soup_server_add_handler (server, NULL, server_handler, NULL, NULL);
-		fast_uri = g_strdup_printf ("https://127.0.0.1:%u/",
-					    soup_server_get_port (server));
-		slow_uri = g_strdup_printf ("https://127.0.0.1:%u/slow",
-					    soup_server_get_port (server));
+		fast_uri = soup_test_server_get_uri (server, "https", "127.0.0.1");
+		slow_uri = soup_uri_new_with_base (fast_uri, "/slow");
 
 		/* The 1-second timeouts are too fast for some machines... */
 		test_session = soup_test_session_new (SOUP_TYPE_SESSION, NULL);
@@ -365,10 +359,11 @@ main (int argc, char **argv)
 		}
 
 		do_timeout_tests (fast_uri, slow_uri, extra_slow);
-		g_free (fast_uri);
-		g_free (slow_uri);
-		soup_test_server_quit_unref (server);
+		soup_uri_free (fast_uri);
+		soup_uri_free (slow_uri);
 	}
+
+	soup_test_server_quit_unref (server);
 
 	test_cleanup ();
 	return errors != 0;

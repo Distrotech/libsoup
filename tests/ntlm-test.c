@@ -42,7 +42,7 @@ server_callback (SoupServer *server, SoupMessage *msg,
 		 SoupClientContext *client, gpointer data)
 {
 	GHashTable *connections = data;
-	SoupSocket *socket;
+	GSocket *socket;
 	const char *auth;
 	NTLMServerState state, required_user = 0;
 	gboolean auth_required, not_found = FALSE;
@@ -68,7 +68,7 @@ server_callback (SoupServer *server, SoupMessage *msg,
 	if (strstr (path, "/404"))
 		not_found = TRUE;
 
-	socket = soup_client_context_get_socket (client);
+	socket = soup_client_context_get_gsocket (client);
 	state = GPOINTER_TO_INT (g_hash_table_lookup (connections, socket));
 	auth = soup_message_headers_get_one (msg->request_headers,
 					     "Authorization");
@@ -555,13 +555,12 @@ main (int argc, char **argv)
 
 	test_init (argc, argv, NULL);
 
-	server = soup_test_server_new (TRUE);
+	server = soup_test_server_new (SOUP_TEST_SERVER_IN_THREAD);
 	connections = g_hash_table_new (NULL, NULL);
 	soup_server_add_handler (server, NULL,
 				 server_callback, connections, NULL);
 
-	uri = soup_uri_new ("http://127.0.0.1/");
-	soup_uri_set_port (uri, soup_server_get_port (server));
+	uri = soup_test_server_get_uri (server, "http", NULL);
 
 	/* Built-in NTLM auth support. (We set SOUP_NTLM_AUTH_DEBUG to
 	 * an empty string to ensure that the built-in support is
@@ -592,8 +591,6 @@ main (int argc, char **argv)
 	g_setenv ("SOUP_NTLM_AUTH_DEBUG", "", TRUE);
 	debug_printf (1, "\nRetrying on failed password\n");
 	do_retrying_test (uri);
-
-	soup_uri_free (uri);
 
 	soup_test_server_quit_unref (server);
 	test_cleanup ();

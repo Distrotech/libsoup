@@ -3,13 +3,13 @@
 #include "test-utils.h"
 
 static void
-do_ssl_test_for_session (SoupSession *session, char *uri)
+do_ssl_test_for_session (SoupSession *session, SoupURI *uri)
 {
 	SoupMessage *msg;
 	GTlsCertificate *cert;
 	GTlsCertificateFlags flags;
 
-	msg = soup_message_new ("GET", uri);
+	msg = soup_message_new_from_uri ("GET", uri);
 	soup_session_send_message (session, msg);
 	if (msg->status_code != SOUP_STATUS_SSL_FAILED) {
 		debug_printf (1, "    Unexpected status: %d %s\n",
@@ -34,7 +34,7 @@ do_ssl_test_for_session (SoupSession *session, char *uri)
 }
 
 static void
-do_ssl_tests (char *uri)
+do_ssl_tests (SoupURI *uri)
 {
 	SoupSession *session;
 
@@ -167,7 +167,8 @@ int
 main (int argc, char **argv)
 {
 	SoupServer *server;
-	char *uri;
+	SoupURI *uri;
+	guint port;
 
 	/* Force this test to use the dummy TLS backend */
 	g_setenv ("GIO_USE_TLS", "dummy", TRUE);
@@ -180,13 +181,15 @@ main (int argc, char **argv)
 	 */
 	server = soup_test_server_new (TRUE);
 	soup_server_add_handler (server, NULL, server_handler, NULL, NULL);
-	uri = g_strdup_printf ("https://127.0.0.1:%u/",
-			       soup_server_get_port (server));
+	uri = soup_test_server_get_uri (server, "http", NULL);
+	port = uri->port;
+	soup_uri_set_scheme (uri, SOUP_URI_SCHEME_HTTPS);
+	soup_uri_set_port (uri, port);
 
 	do_session_property_tests ();
 	do_ssl_tests (uri);
 
-	g_free (uri);
+	soup_uri_free (uri);
 	soup_test_server_quit_unref (server);
 
 	test_cleanup ();

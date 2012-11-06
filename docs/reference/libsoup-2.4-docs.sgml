@@ -34,6 +34,7 @@
     <xi:include href="xml/soup-request-file.xml"/>
     <xi:include href="xml/soup-request-data.xml"/>
     <xi:include href="xml/soup-server.xml"/>
+    <xi:include href="xml/soup-server-deprecated.xml"/>
     <xi:include href="xml/soup-session.xml"/>
     <xi:include href="xml/soup-session-async.xml"/>
     <xi:include href="xml/soup-session-sync.xml"/>

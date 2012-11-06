@@ -417,38 +417,44 @@ main (int argc, char **argv)
 {
 	GMainLoop *loop;
 	SoupServer *server;
-	guint port;
+	SoupURI *base_uri, *uri;
 	char *uri_str;
 
 	test_init (argc, argv, no_test_entry);
 
-	server = soup_test_server_new (TRUE);
+	server = soup_test_server_new (SOUP_TEST_SERVER_IN_THREAD);
 	soup_server_add_handler (server, "/hello",
 				 hello_callback, NULL, NULL);
 	soup_server_add_handler (server, "/md5",
 				 md5_callback, NULL, NULL);
-	port = soup_server_get_port (server);
+	base_uri = soup_test_server_get_uri (server, "http", NULL);
 
 	loop = g_main_loop_new (NULL, TRUE);
 
 	if (run_tests) {
-		uri_str = g_strdup_printf ("http://127.0.0.1:%u/hello", port);
+		uri = soup_uri_new_with_base (base_uri, "/hello");
+		uri_str = soup_uri_to_string (uri, FALSE);
 		do_hello_tests (uri_str);
+		soup_uri_free (uri);
 		g_free (uri_str);
 
-		uri_str = g_strdup_printf ("http://127.0.0.1:%u/md5", port);
+		uri = soup_uri_new_with_base (base_uri, "/md5");
+		uri_str = soup_uri_to_string (uri, FALSE);
 		do_md5_tests (uri_str);
+		soup_uri_free (uri);
 		g_free (uri_str);
 
 		do_form_decode_test ();
 	} else {
-		g_print ("Listening on port %d\n", port);
+		g_print ("Listening on port %d\n", base_uri->port);
 		g_main_loop_run (loop);
 	}
 
 	g_main_loop_unref (loop);
 
 	soup_test_server_quit_unref (server);
+	soup_uri_free (base_uri);
+
 	if (run_tests)
 		test_cleanup ();
 	return errors != 0;

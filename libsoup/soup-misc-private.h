@@ -46,6 +46,7 @@ GIOStream *soup_socket_get_iostream   (SoupSocket *sock);
 
 #define SOUP_SOCKET_CLEAN_DISPOSE "clean-dispose"
 #define SOUP_SOCKET_PROXY_RESOLVER "proxy-resolver"
+#define SOUP_SOCKET_IPV6_ONLY     "ipv6-only"
 SoupURI *soup_socket_get_http_proxy_uri (SoupSocket *sock);
 
 /* At some point it might be possible to mark additional methods
@@ -72,5 +73,7 @@ guint soup_message_headers_get_ranges_internal (SoupMessageHeaders  *hdrs,
 						gboolean             check_satisfiable,
 						SoupRange          **ranges,
 						int                 *length);
+
+SoupAddress *soup_address_new_from_gsockaddr (GSocketAddress *addr);
 
 #endif /* SOUP_MISC_PRIVATE_H */

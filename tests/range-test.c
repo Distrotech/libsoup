@@ -399,7 +399,8 @@ main (int argc, char **argv)
 {
 	SoupSession *session;
 	SoupServer *server;
-	char *base_uri;
+	SoupURI *base_uri;
+	char *base_uri_str;
 
 	test_init (argc, argv, NULL);
 	apache_init ();
@@ -417,12 +418,13 @@ main (int argc, char **argv)
 #endif
 
 	debug_printf (1, "\n2. Testing against SoupServer\n");
-	server = soup_test_server_new (FALSE);
+	server = soup_test_server_new (SOUP_TEST_SERVER_DEFAULT);
 	soup_server_add_handler (server, NULL, server_handler, NULL, NULL);
-	base_uri = g_strdup_printf ("http://127.0.0.1:%u/",
-				    soup_server_get_port (server));
-	do_range_test (session, base_uri, TRUE, TRUE);
-	g_free (base_uri);
+	base_uri = soup_test_server_get_uri (server, "http", NULL);
+	base_uri_str = soup_uri_to_string (base_uri, FALSE);
+	do_range_test (session, base_uri_str, TRUE, TRUE);
+	soup_uri_free (base_uri);
+	g_free (base_uri_str);
 	soup_test_server_quit_unref (server);
 
 	soup_test_session_abort_unref (session);

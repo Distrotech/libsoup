@@ -65,7 +65,7 @@ server_callback (SoupServer *server, SoupMessage *msg,
 	sd->server = server;
 	sd->msg = msg;
 	sd->timeout = soup_add_timeout (
-		soup_server_get_async_context (server),
+		g_main_context_get_thread_default (),
 		200, add_body_chunk, sd);
 	g_signal_connect (msg, "finished",
 			  G_CALLBACK (request_failed), sd);
@@ -364,13 +364,15 @@ int
 main (int argc, char **argv)
 {
 	SoupServer *server;
+	SoupURI *uri;
 
 	test_init (argc, argv, NULL);
 
-	server = soup_test_server_new (TRUE);
+	server = soup_test_server_new (SOUP_TEST_SERVER_IN_THREAD);
 	soup_server_add_handler (server, NULL, server_callback, NULL, NULL);
-	base_uri = g_strdup_printf ("http://127.0.0.1:%u/",
-				    soup_server_get_port (server));
+	uri = soup_test_server_get_uri (server, "http", NULL);
+	base_uri = soup_uri_to_string (uri, FALSE);
+	soup_uri_free (uri);
 
 	do_test1 (1, FALSE);
 	do_test1 (2, TRUE);
