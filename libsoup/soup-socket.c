@@ -16,7 +16,7 @@
 #include "soup-socket.h"
 #include "soup.h"
 #include "soup-filter-input-stream.h"
-#include "soup-io-stream.h"
+#include "soup-socket-io-stream.h"
 #include "soup-misc-private.h"
 
 /**
@@ -144,8 +144,6 @@ soup_socket_finalize (GObject *object)
 
 	g_clear_object (&priv->conn);
 	g_clear_object (&priv->iostream);
-	g_clear_object (&priv->istream);
-	g_clear_object (&priv->ostream);
 
 	g_clear_object (&priv->local_addr);
 	g_clear_object (&priv->remote_addr);
@@ -175,11 +173,9 @@ finish_socket_setup (SoupSocketPrivate *priv)
 	if (!priv->conn)
 		priv->conn = (GIOStream *)g_socket_connection_factory_create_connection (priv->gsock);
 	if (!priv->iostream)
-		priv->iostream = soup_io_stream_new (priv->conn, FALSE);
-	if (!priv->istream)
-		priv->istream = g_object_ref (g_io_stream_get_input_stream (priv->iostream));
-	if (!priv->ostream)
-		priv->ostream = g_object_ref (g_io_stream_get_output_stream (priv->iostream));
+		priv->iostream = soup_socket_io_stream_new (priv->conn);
+	priv->istream = g_io_stream_get_input_stream (priv->iostream);
+	priv->ostream = g_io_stream_get_output_stream (priv->iostream);
 
 	g_socket_set_timeout (priv->gsock, priv->timeout);
 }
@@ -1162,12 +1158,10 @@ soup_socket_setup_ssl (SoupSocket    *sock,
 	g_signal_connect (priv->conn, "notify::peer-certificate",
 			  G_CALLBACK (soup_socket_peer_certificate_changed), sock);
 
-	g_clear_object (&priv->istream);
-	g_clear_object (&priv->ostream);
 	g_clear_object (&priv->iostream);
-	priv->iostream = soup_io_stream_new (priv->conn, FALSE);
-	priv->istream = g_object_ref (g_io_stream_get_input_stream (priv->iostream));
-	priv->ostream = g_object_ref (g_io_stream_get_output_stream (priv->iostream));
+	priv->iostream = soup_socket_io_stream_new (priv->conn);
+	priv->istream = g_io_stream_get_input_stream (priv->iostream);
+	priv->ostream = g_io_stream_get_output_stream (priv->iostream);
 
 	return TRUE;
 }
