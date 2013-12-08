@@ -59,7 +59,7 @@ server_callback (SoupServer *server, SoupMessage *msg,
 					     "Content-Type", "text/plain");
 	}
 
-	if (g_str_has_prefix (path, "/text_or_binary/")) {
+	if (g_str_has_prefix (path, "/text_or_binary/") || g_str_has_prefix (path, "/apache_bug/")) {
 		char *base_name = g_path_get_basename (path);
 		char *file_name = g_strdup_printf (SRCDIR "/resources/%s", base_name);
 
@@ -514,7 +514,10 @@ main (int argc, char **argv)
 	do_signals_test (TRUE, TRUE, TRUE, FALSE, TRUE);
 	do_signals_test (TRUE, TRUE, TRUE, TRUE, TRUE);
 
-	/* Test the text_or_binary sniffing path */
+	/* Test the apache bug sniffing path */
+
+	test_sniffing ("/apache_bug/text_binary.txt", "application/octet-stream");
+	test_sniffing ("/apache_bug/text.txt", "text/plain");
 
 	/* GIF is a 'safe' type */
 	test_sniffing ("/text_or_binary/home.gif", "image/gif");
