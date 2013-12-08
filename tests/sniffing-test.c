@@ -59,6 +59,30 @@ server_callback (SoupServer *server, SoupMessage *msg,
 					     "Content-Type", "text/plain");
 	}
 
+	if (g_str_has_prefix (path, "/nosniff/")) {
+		char *base_name = g_path_get_basename (path);
+		char *file_name = g_strdup_printf (SRCDIR "/resources/%s", base_name);
+
+		g_file_get_contents (file_name,
+				     &contents, &length,
+				     &error);
+
+		g_free (base_name);
+		g_free (file_name);
+
+		if (error) {
+			g_error ("%s", error->message);
+			g_error_free (error);
+			exit (1);
+		}
+
+		soup_message_headers_append (msg->response_headers,
+					     "X-Content-Type-Options", "nosniff");
+
+		soup_message_headers_append (msg->response_headers,
+					     "Content-Type", "no/sniffing-allowed");
+	}
+
 	if (g_str_has_prefix (path, "/text_or_binary/") || g_str_has_prefix (path, "/apache_bug/")) {
 		char *base_name = g_path_get_basename (path);
 		char *file_name = g_strdup_printf (SRCDIR "/resources/%s", base_name);
@@ -518,6 +542,9 @@ main (int argc, char **argv)
 
 	test_sniffing ("/apache_bug/text_binary.txt", "application/octet-stream");
 	test_sniffing ("/apache_bug/text.txt", "text/plain");
+
+	/* X-Content-Type-Options: nosniff */
+	test_sniffing ("/nosniff/home.gif", "no/sniffing-allowed");
 
 	/* GIF is a 'safe' type */
 	test_sniffing ("/text_or_binary/home.gif", "image/gif");
