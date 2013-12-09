@@ -20,10 +20,9 @@
 #include "soup-misc-private.h"
 #include "soup-message-queue.h"
 #include "soup-proxy-resolver-wrapper.h"
+#include "soup-session-host.h"
 #include "soup-session-private.h"
 #include "soup-socket-properties.h"
-
-#define HOST_KEEP_ALIVE 5 * 60 * 1000 /* 5 min in msecs */
 
 /**
  * SECTION:soup-session
@@ -65,22 +64,9 @@ soup_init (void)
 #endif
 }
 
-typedef struct {
-	SoupURI     *uri;
-	SoupAddress *addr;
-
-	GSList      *connections;      /* CONTAINS: SoupConnection */
-	guint        num_conns;
-
-	guint        num_messages;
-
-	gboolean     ssl_fallback;
-
-	GSource     *keep_alive_src;
-	SoupSession *session;
-} SoupSessionHost;
 static guint soup_host_uri_hash (gconstpointer key);
 static gboolean soup_host_uri_equal (gconstpointer v1, gconstpointer v2);
+static void free_unused_host (SoupSessionHost *host, gpointer session);
 
 typedef struct {
 	SoupSession *session;
@@ -135,7 +121,6 @@ typedef struct {
 
 #define SOUP_IS_PLAIN_SESSION(o) (G_TYPE_FROM_INSTANCE (o) == SOUP_TYPE_SESSION)
 
-static void free_host (SoupSessionHost *host);
 static void connection_state_changed (GObject *object, GParamSpec *param,
 				      gpointer user_data);
 static void connection_disconnected (SoupConnection *conn, gpointer user_data);
@@ -176,6 +161,7 @@ static guint signals[LAST_SIGNAL] = { 0 };
 enum {
 	PROP_0,
 
+	PROP_SOCKET_PROPERTIES,
 	PROP_PROXY_URI,
 	PROP_PROXY_RESOLVER,
 	PROP_MAX_CONNS,
@@ -216,10 +202,10 @@ soup_session_init (SoupSession *session)
 	g_cond_init (&priv->conn_cond);
 	priv->http_hosts = g_hash_table_new_full (soup_host_uri_hash,
 						  soup_host_uri_equal,
-						  NULL, (GDestroyNotify)free_host);
+						  NULL, g_object_unref);
 	priv->https_hosts = g_hash_table_new_full (soup_host_uri_hash,
 						   soup_host_uri_equal,
-						   NULL, (GDestroyNotify)free_host);
+						   NULL, g_object_unref);
 	priv->conns = g_hash_table_new (NULL, NULL);
 
 	priv->max_conns = SOUP_SESSION_MAX_CONNS_DEFAULT;
@@ -754,8 +740,21 @@ soup_session_get_property (GObject *object, guint prop_id,
 	SoupSessionPrivate *priv = SOUP_SESSION_GET_PRIVATE (session);
 	SoupSessionFeature *feature;
 	GTlsDatabase *tlsdb;
+	SoupSocketProperties *props;
 
 	switch (prop_id) {
+	case PROP_SOCKET_PROPERTIES:
+		tlsdb = get_tls_database (session);
+		props = soup_socket_properties_new (priv->async_context,
+						    priv->use_thread_context,
+						    get_proxy_resolver (session),
+						    priv->local_addr,
+						    tlsdb,
+						    priv->ssl_strict && (tlsdb != NULL || SOUP_IS_PLAIN_SESSION (priv->session)),
+						    priv->io_timeout,
+						    priv->idle_timeout);
+		g_value_take_boxed (value, props);
+		break;
 	case PROP_LOCAL_ADDRESS:
 		g_value_set_object (value, priv->local_addr);
 		break;
@@ -925,35 +924,6 @@ soup_host_uri_equal (gconstpointer v1, gconstpointer v2)
 	return g_ascii_strcasecmp (one->host, two->host) == 0;
 }
 
-
-static SoupSessionHost *
-soup_session_host_new (SoupSession *session, SoupURI *uri)
-{
-	SoupSessionHost *host;
-
-	host = g_slice_new0 (SoupSessionHost);
-	host->uri = soup_uri_copy_host (uri);
-	if (host->uri->scheme != SOUP_URI_SCHEME_HTTP &&
-	    host->uri->scheme != SOUP_URI_SCHEME_HTTPS) {
-		SoupSessionPrivate *priv = SOUP_SESSION_GET_PRIVATE (session);
-
-		if (soup_uri_is_https (host->uri, priv->https_aliases))
-			host->uri->scheme = SOUP_URI_SCHEME_HTTPS;
-		else
-			host->uri->scheme = SOUP_URI_SCHEME_HTTP;
-	}
-
-	host->addr = g_object_new (SOUP_TYPE_ADDRESS,
-				   SOUP_ADDRESS_NAME, host->uri->host,
-				   SOUP_ADDRESS_PORT, host->uri->port,
-				   SOUP_ADDRESS_PROTOCOL, host->uri->scheme,
-				   NULL);
-	host->keep_alive_src = NULL;
-	host->session = session;
-
-	return host;
-}
-
 /* Requires conn_lock to be locked */
 static SoupSessionHost *
 get_host_for_uri (SoupSession *session, SoupURI *uri)
@@ -976,14 +946,16 @@ get_host_for_uri (SoupSession *session, SoupURI *uri)
 		uri = uri_tmp = soup_uri_copy (uri);
 		uri->scheme = https ? SOUP_URI_SCHEME_HTTPS : SOUP_URI_SCHEME_HTTP;
 	}
-	host = soup_session_host_new (session, uri);
+	host = soup_session_host_new (session, uri, priv->max_conns_per_host);
 	if (uri_tmp)
 		soup_uri_free (uri_tmp);
 
 	if (https)
-		g_hash_table_insert (priv->https_hosts, host->uri, host);
+		g_hash_table_insert (priv->https_hosts, soup_session_host_get_uri (host), host);
 	else
-		g_hash_table_insert (priv->http_hosts, host->uri, host);
+		g_hash_table_insert (priv->http_hosts, soup_session_host_get_uri (host), host);
+
+	g_signal_connect (host, "unused", G_CALLBACK (free_unused_host), session);
 
 	return host;
 }
@@ -993,21 +965,6 @@ static SoupSessionHost *
 get_host_for_message (SoupSession *session, SoupMessage *msg)
 {
 	return get_host_for_uri (session, soup_message_get_uri (msg));
-}
-
-static void
-free_host (SoupSessionHost *host)
-{
-	g_warn_if_fail (host->connections == NULL);
-
-	if (host->keep_alive_src) {
-		g_source_destroy (host->keep_alive_src);
-		g_source_unref (host->keep_alive_src);
-	}
-
-	soup_uri_free (host->uri);
-	g_object_unref (host->addr);
-	g_slice_free (SoupSessionHost, host);
 }
 
 static void
@@ -1231,7 +1188,7 @@ soup_session_append_queue_item (SoupSession *session, SoupMessage *msg,
 
 	g_mutex_lock (&priv->conn_lock);
 	host = get_host_for_message (session, item->msg);
-	host->num_messages++;
+	soup_session_host_add_message (host, msg);
 	g_mutex_unlock (&priv->conn_lock);
 
 	if (!(soup_message_get_flags (msg) & SOUP_MESSAGE_NO_REDIRECT)) {
@@ -1323,32 +1280,32 @@ soup_session_cleanup_connections (SoupSession *session,
 	return TRUE;
 }
 
-static gboolean
-free_unused_host (gpointer user_data)
+static void
+free_unused_host (SoupSessionHost *host,
+		  gpointer         session)
 {
-	SoupSessionHost *host = (SoupSessionHost *) user_data;
-	SoupSessionPrivate *priv = SOUP_SESSION_GET_PRIVATE (host->session);
+	SoupSessionPrivate *priv = SOUP_SESSION_GET_PRIVATE (session);
+	SoupURI *uri;
 
 	g_mutex_lock (&priv->conn_lock);
 
 	/* In a multithreaded session, a connection might have been
 	 * added while we were waiting for conn_lock.
 	 */
-	if (host->connections) {
+	if (soup_session_host_get_num_connections (host)) {
 		g_mutex_unlock (&priv->conn_lock);
-		return FALSE;
+		return;
 	}
 
 	/* This will free the host in addition to removing it from the
 	 * hash table
 	 */
-	if (host->uri->scheme == SOUP_URI_SCHEME_HTTPS)
-		g_hash_table_remove (priv->https_hosts, host->uri);
+	uri = soup_session_host_get_uri (host);
+	if (uri->scheme == SOUP_URI_SCHEME_HTTPS)
+		g_hash_table_remove (priv->https_hosts, uri);
 	else
-		g_hash_table_remove (priv->http_hosts, host->uri);
+		g_hash_table_remove (priv->http_hosts, uri);
 	g_mutex_unlock (&priv->conn_lock);
-
-	return FALSE;
 }
 
 static void
@@ -1360,26 +1317,8 @@ drop_connection (SoupSession *session, SoupSessionHost *host, SoupConnection *co
 	 * from priv->conns itself.
 	 */
 
-	if (host) {
-		host->connections = g_slist_remove (host->connections, conn);
-		host->num_conns--;
-
-		/* Free the SoupHost (and its SoupAddress) if there
-		 * has not been any new connection to the host during
-		 * the last HOST_KEEP_ALIVE msecs.
-		 */
-		if (host->num_conns == 0) {
-			g_assert (host->keep_alive_src == NULL);
-			host->keep_alive_src = soup_add_timeout (priv->async_context,
-								 HOST_KEEP_ALIVE,
-								 free_unused_host,
-								 host);
-			host->keep_alive_src = g_source_ref (host->keep_alive_src);
-		}
-
-		if (soup_connection_get_ssl_fallback (conn))
-			host->ssl_fallback = TRUE;
-	}
+	if (host)
+		soup_session_host_remove_connection (host, conn);
 
 	g_signal_handlers_disconnect_by_func (conn, connection_disconnected, session);
 	g_signal_handlers_disconnect_by_func (conn, connection_state_changed, session);
@@ -1449,7 +1388,7 @@ soup_session_unqueue_item (SoupSession          *session,
 
 	g_mutex_lock (&priv->conn_lock);
 	host = get_host_for_message (session, item->msg);
-	host->num_messages--;
+	soup_session_host_remove_message (host, item->msg);
 	g_cond_broadcast (&priv->conn_cond);
 	g_mutex_unlock (&priv->conn_lock);
 
@@ -1538,8 +1477,8 @@ status_from_connect_error (SoupMessageQueueItem *item, GError *error)
 
 		g_mutex_lock (&priv->conn_lock);
 		host = get_host_for_message (item->session, item->msg);
-		if (!host->ssl_fallback) {
-			host->ssl_fallback = TRUE;
+		if (!soup_session_host_get_ssl_fallback (host)) {
+			soup_session_host_set_ssl_fallback (host, TRUE);
 			status = SOUP_STATUS_TRY_AGAIN;
 		} else
 			status = SOUP_STATUS_SSL_FAILED;
@@ -1739,89 +1678,35 @@ get_connection_for_host (SoupSession *session,
 {
 	SoupSessionPrivate *priv = SOUP_SESSION_GET_PRIVATE (session);
 	SoupConnection *conn;
-	GSList *conns;
-	int num_pending = 0;
-	GTlsDatabase *tlsdb;
-	gboolean ssl_strict;
-	SoupSocketProperties *socket_props;
 
 	if (priv->disposed)
-		return FALSE;
+		return NULL;
 
 	if (item->conn) {
-		g_return_val_if_fail (soup_connection_get_state (item->conn) != SOUP_CONNECTION_DISCONNECTED, FALSE);
+		g_return_val_if_fail (soup_connection_get_state (item->conn) != SOUP_CONNECTION_DISCONNECTED, NULL);
 		return item->conn;
 	}
 
-	for (conns = host->connections; conns; conns = conns->next) {
-		conn = conns->data;
+	conn = soup_session_host_get_connection (host, need_new_connection,
+						 priv->num_conns >= priv->max_conns,
+						 try_cleanup);
 
-		if (!need_new_connection && soup_connection_get_state (conn) == SOUP_CONNECTION_IDLE) {
-			soup_connection_set_state (conn, SOUP_CONNECTION_IN_USE);
-			return conn;
-		} else if (soup_connection_get_state (conn) == SOUP_CONNECTION_CONNECTING)
-			num_pending++;
-	}
+	if (conn && soup_connection_get_state (conn) == SOUP_CONNECTION_NEW) {
+		g_signal_connect (conn, "disconnected",
+				  G_CALLBACK (connection_disconnected),
+				  session);
+		g_signal_connect (conn, "notify::state",
+				  G_CALLBACK (connection_state_changed),
+				  session);
 
-	/* Limit the number of pending connections; num_messages / 2
-	 * is somewhat arbitrary...
-	 */
-	if (num_pending > host->num_messages / 2)
-		return NULL;
+		/* This is a debugging-related signal, and so can ignore the
+		 * usual rule about not emitting signals while holding
+		 * conn_lock.
+		 */
+		g_signal_emit (session, signals[CONNECTION_CREATED], 0, conn);
 
-	if (host->num_conns >= priv->max_conns_per_host) {
-		if (need_new_connection)
-			*try_cleanup = TRUE;
-		return NULL;
-	}
-
-	if (priv->num_conns >= priv->max_conns) {
-		*try_cleanup = TRUE;
-		return NULL;
-	}
-
-	tlsdb = get_tls_database (session);
-	ssl_strict = priv->ssl_strict && (tlsdb != NULL || SOUP_IS_PLAIN_SESSION (priv->session));
-	socket_props = soup_socket_properties_new (priv->async_context,
-						   priv->use_thread_context,
-						   get_proxy_resolver (session),
-						   priv->local_addr,
-						   tlsdb,
-						   ssl_strict,
-						   priv->io_timeout,
-						   priv->idle_timeout);
-
-	conn = g_object_new (
-		SOUP_TYPE_CONNECTION,
-		SOUP_CONNECTION_REMOTE_URI, host->uri,
-		SOUP_CONNECTION_SSL_FALLBACK, host->ssl_fallback,
-		SOUP_CONNECTION_SOCKET_PROPERTIES, socket_props,
-		NULL);
-	soup_socket_properties_unref (socket_props);
-
-	g_signal_connect (conn, "disconnected",
-			  G_CALLBACK (connection_disconnected),
-			  session);
-	g_signal_connect (conn, "notify::state",
-			  G_CALLBACK (connection_state_changed),
-			  session);
-
-	/* This is a debugging-related signal, and so can ignore the
-	 * usual rule about not emitting signals while holding
-	 * conn_lock.
-	 */
-	g_signal_emit (session, signals[CONNECTION_CREATED], 0, conn);
-
-	g_hash_table_insert (priv->conns, conn, host);
-
-	priv->num_conns++;
-	host->num_conns++;
-	host->connections = g_slist_prepend (host->connections, conn);
-
-	if (host->keep_alive_src) {
-		g_source_destroy (host->keep_alive_src);
-		g_source_unref (host->keep_alive_src);
-		host->keep_alive_src = NULL;
+		g_hash_table_insert (priv->conns, conn, host);
+		priv->num_conns++;
 	}
 
 	return conn;
@@ -2490,7 +2375,7 @@ prefetch_uri (SoupSession *session, SoupURI *uri,
 
 	g_mutex_lock (&priv->conn_lock);
 	host = get_host_for_uri (session, uri);
-	addr = g_object_ref (host->addr);
+	addr = g_object_ref (soup_session_host_get_address (host));
 	g_mutex_unlock (&priv->conn_lock);
 
 	soup_address_resolve_async (addr,
@@ -3100,6 +2985,13 @@ soup_session_class_init (SoupSessionClass *session_class)
 
 
 	/* properties */
+	g_object_class_install_property (
+		object_class, PROP_SOCKET_PROPERTIES,
+		g_param_spec_boxed (SOUP_SESSION_SOCKET_PROPERTIES,
+				    "Socket properties",
+				    "Socket properties",
+				    SOUP_TYPE_SOCKET_PROPERTIES,
+				    G_PARAM_READABLE));
 	/**
 	 * SoupSession:proxy-uri:
 	 *

@@ -66,6 +66,10 @@ SoupURI *soup_socket_get_http_proxy_uri (SoupSocket *sock);
 GSource *soup_add_completion_reffed (GMainContext *async_context,
 				     GSourceFunc   function,
 				     gpointer      data);
+GSource *soup_add_timeout_reffed (GMainContext *async_context,
+				  guint         interval,
+				  GSourceFunc   function,
+				  gpointer      data);
 
 guint soup_message_headers_get_ranges_internal (SoupMessageHeaders  *hdrs,
 						goffset              total_length,
