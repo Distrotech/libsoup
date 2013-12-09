@@ -186,6 +186,8 @@ libsoup_2_4_la_SOURCES =		\
 	soup-socket.c			\
 	soup-socket-io-stream.h		\
 	soup-socket-io-stream.c		\
+	soup-socket-properties.h	\
+	soup-socket-properties.c	\
 	soup-status.c			\
 	soup-tld.c			\
 	soup-tld-private.h		\
