@@ -21,6 +21,7 @@
 #include "soup-message-queue.h"
 #include "soup-proxy-resolver-wrapper.h"
 #include "soup-session-private.h"
+#include "soup-socket-properties.h"
 
 #define HOST_KEEP_ALIVE 5 * 60 * 1000 /* 5 min in msecs */
 
@@ -959,17 +960,27 @@ get_host_for_uri (SoupSession *session, SoupURI *uri)
 {
 	SoupSessionPrivate *priv = SOUP_SESSION_GET_PRIVATE (session);
 	SoupSessionHost *host;
+	gboolean https;
+	SoupURI *uri_tmp = NULL;
 
-	if (soup_uri_is_https (uri, priv->https_aliases))
+	https = soup_uri_is_https (uri, priv->https_aliases);
+	if (https)
 		host = g_hash_table_lookup (priv->https_hosts, uri);
 	else
 		host = g_hash_table_lookup (priv->http_hosts, uri);
 	if (host)
 		return host;
 
+	if (uri->scheme != SOUP_URI_SCHEME_HTTP &&
+	    uri->scheme != SOUP_URI_SCHEME_HTTPS) {
+		uri = uri_tmp = soup_uri_copy (uri);
+		uri->scheme = https ? SOUP_URI_SCHEME_HTTPS : SOUP_URI_SCHEME_HTTP;
+	}
 	host = soup_session_host_new (session, uri);
+	if (uri_tmp)
+		soup_uri_free (uri_tmp);
 
-	if (soup_uri_is_https (uri, priv->https_aliases))
+	if (https)
 		g_hash_table_insert (priv->https_hosts, host->uri, host);
 	else
 		g_hash_table_insert (priv->http_hosts, host->uri, host);
@@ -1729,8 +1740,9 @@ get_connection_for_host (SoupSession *session,
 	SoupConnection *conn;
 	GSList *conns;
 	int num_pending = 0;
-	GProxyResolver *proxy_resolver;
 	GTlsDatabase *tlsdb;
+	gboolean ssl_strict;
+	SoupSocketProperties *socket_props;
 
 	if (priv->disposed)
 		return FALSE;
@@ -1767,23 +1779,25 @@ get_connection_for_host (SoupSession *session,
 		return NULL;
 	}
 
-	proxy_resolver = get_proxy_resolver (session);
 	tlsdb = get_tls_database (session);
+	ssl_strict = priv->ssl_strict && (tlsdb != NULL || SOUP_IS_PLAIN_SESSION (priv->session));
+	socket_props = soup_socket_properties_new (priv->async_context,
+						   priv->use_thread_context,
+						   get_proxy_resolver (session),
+						   priv->local_addr,
+						   tlsdb,
+						   ssl_strict,
+						   priv->io_timeout,
+						   priv->idle_timeout);
 
 	conn = g_object_new (
 		SOUP_TYPE_CONNECTION,
 		SOUP_CONNECTION_REMOTE_URI, host->uri,
-		SOUP_CONNECTION_PROXY_RESOLVER, proxy_resolver,
-		SOUP_CONNECTION_SSL, soup_uri_is_https (soup_message_get_uri (item->msg), priv->https_aliases),
-		SOUP_CONNECTION_SSL_CREDENTIALS, tlsdb,
-		SOUP_CONNECTION_SSL_STRICT, priv->ssl_strict && (tlsdb != NULL || SOUP_IS_PLAIN_SESSION (session)),
-		SOUP_CONNECTION_ASYNC_CONTEXT, priv->async_context,
-		SOUP_CONNECTION_USE_THREAD_CONTEXT, priv->use_thread_context,
-		SOUP_CONNECTION_TIMEOUT, priv->io_timeout,
-		SOUP_CONNECTION_IDLE_TIMEOUT, priv->idle_timeout,
 		SOUP_CONNECTION_SSL_FALLBACK, host->ssl_fallback,
-		SOUP_CONNECTION_LOCAL_ADDRESS, priv->local_addr,
+		SOUP_CONNECTION_SOCKET_PROPERTIES, socket_props,
 		NULL);
+	soup_socket_properties_unref (socket_props);
+
 	g_signal_connect (conn, "disconnected",
 			  G_CALLBACK (connection_disconnected),
 			  session);
