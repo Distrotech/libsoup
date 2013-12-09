@@ -44,7 +44,6 @@ enum {
 	PROP_0,
 
 	PROP_REMOTE_URI,
-	PROP_SSL,
 	PROP_SSL_FALLBACK,
 	PROP_SOCKET_PROPERTIES,
 	PROP_STATE,
@@ -101,9 +100,7 @@ soup_connection_set_property (GObject *object, guint prop_id,
 	switch (prop_id) {
 	case PROP_REMOTE_URI:
 		priv->remote_uri = g_value_dup_boxed (value);
-		break;
-	case PROP_SSL:
-		priv->ssl = g_value_get_boolean (value);
+		priv->ssl = (priv->remote_uri->scheme == SOUP_URI_SCHEME_HTTPS);
 		break;
 	case PROP_SSL_FALLBACK:
 		priv->ssl_fallback = g_value_get_boolean (value);
@@ -129,9 +126,6 @@ soup_connection_get_property (GObject *object, guint prop_id,
 	switch (prop_id) {
 	case PROP_REMOTE_URI:
 		g_value_set_boxed (value, priv->remote_uri);
-		break;
-	case PROP_SSL:
-		g_value_set_boolean (value, priv->ssl);
 		break;
 	case PROP_SSL_FALLBACK:
 		g_value_set_boolean (value, priv->ssl_fallback);

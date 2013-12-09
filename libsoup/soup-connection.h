@@ -36,7 +36,6 @@ GType soup_connection_get_type (void);
 
 
 #define SOUP_CONNECTION_REMOTE_URI        "remote-uri"
-#define SOUP_CONNECTION_SSL               "ssl"
 #define SOUP_CONNECTION_SSL_FALLBACK      "ssl-fallback"
 #define SOUP_CONNECTION_SOCKET_PROPERTIES "socket-properties"
 #define SOUP_CONNECTION_STATE             "state"
