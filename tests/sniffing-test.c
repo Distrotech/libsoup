@@ -586,15 +586,16 @@ main (int argc, char **argv)
 	test_sniffing ("/type/anice_type+xml/home.gif", "anice/type+xml");
 	test_sniffing ("/type/application_xml/home.gif", "application/xml");
 
-	/* Test the image sniffing path */
-
-	test_sniffing ("/type/image_png/home.gif", "image/gif");
-
 	/* Test the feed or html path */
 
 	test_sniffing ("/type/text_html/test.html", "text/html");
 	test_sniffing ("/type/text_html/rss20.xml", "application/rss+xml");
 	test_sniffing ("/type/text_html/atom.xml", "application/atom+xml");
+	test_sniffing ("/type/text_html/feed.rdf", "application/rss+xml");
+
+	/* Test the image sniffing path */
+
+	test_sniffing ("/type/image_png/home.gif", "image/gif");
 
 	/* The spec tells us to only use the last Content-Type header */
 
