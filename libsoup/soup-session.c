@@ -1417,12 +1417,13 @@ connection_state_changed (GObject *object, GParamSpec *param, gpointer user_data
 		soup_session_kick_queue (session);
 }
 
-SoupMessageQueue *
-soup_session_get_queue (SoupSession *session)
+SoupMessageQueueItem *
+soup_session_lookup_queue_item (SoupSession *session,
+				SoupMessage *msg)
 {
 	SoupSessionPrivate *priv = SOUP_SESSION_GET_PRIVATE (session);
 
-	return priv->queue;
+	return soup_message_queue_lookup (priv->queue, msg);
 }
 
 static void
@@ -2115,10 +2116,9 @@ soup_session_queue_message (SoupSession *session, SoupMessage *msg,
 static void
 soup_session_real_requeue_message (SoupSession *session, SoupMessage *msg)
 {
-	SoupSessionPrivate *priv = SOUP_SESSION_GET_PRIVATE (session);
 	SoupMessageQueueItem *item;
 
-	item = soup_message_queue_lookup (priv->queue, msg);
+	item = soup_session_lookup_queue_item (session, msg);
 	g_return_if_fail (item != NULL);
 
 	if (item->resend_count >= SOUP_SESSION_MAX_RESEND_COUNT) {
@@ -2214,14 +2214,12 @@ void
 soup_session_pause_message (SoupSession *session,
 			    SoupMessage *msg)
 {
-	SoupSessionPrivate *priv;
 	SoupMessageQueueItem *item;
 
 	g_return_if_fail (SOUP_IS_SESSION (session));
 	g_return_if_fail (SOUP_IS_MESSAGE (msg));
 
-	priv = SOUP_SESSION_GET_PRIVATE (session);
-	item = soup_message_queue_lookup (priv->queue, msg);
+	item = soup_session_lookup_queue_item (session, msg);
 	g_return_if_fail (item != NULL);
 	g_return_if_fail (item->async);
 
@@ -2295,14 +2293,12 @@ void
 soup_session_unpause_message (SoupSession *session,
 			      SoupMessage *msg)
 {
-	SoupSessionPrivate *priv;
 	SoupMessageQueueItem *item;
 
 	g_return_if_fail (SOUP_IS_SESSION (session));
 	g_return_if_fail (SOUP_IS_MESSAGE (msg));
 
-	priv = SOUP_SESSION_GET_PRIVATE (session);
-	item = soup_message_queue_lookup (priv->queue, msg);
+	item = soup_session_lookup_queue_item (session, msg);
 	g_return_if_fail (item != NULL);
 	g_return_if_fail (item->async);
 
@@ -2318,10 +2314,9 @@ soup_session_unpause_message (SoupSession *session,
 static void
 soup_session_real_cancel_message (SoupSession *session, SoupMessage *msg, guint status_code)
 {
-	SoupSessionPrivate *priv = SOUP_SESSION_GET_PRIVATE (session);
 	SoupMessageQueueItem *item;
 
-	item = soup_message_queue_lookup (priv->queue, msg);
+	item = soup_session_lookup_queue_item (session, msg);
 	g_return_if_fail (item != NULL);
 
 	item->paused = FALSE;
@@ -2366,14 +2361,12 @@ void
 soup_session_cancel_message (SoupSession *session, SoupMessage *msg,
 			     guint status_code)
 {
-	SoupSessionPrivate *priv;
 	SoupMessageQueueItem *item;
 
 	g_return_if_fail (SOUP_IS_SESSION (session));
 	g_return_if_fail (SOUP_IS_MESSAGE (msg));
 
-	priv = SOUP_SESSION_GET_PRIVATE (session);
-	item = soup_message_queue_lookup (priv->queue, msg);
+	item = soup_session_lookup_queue_item (session, msg);
 	/* If the message is already ending, don't do anything */
 	if (!item)
 		return;
