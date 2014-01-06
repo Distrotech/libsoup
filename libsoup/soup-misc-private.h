@@ -46,6 +46,7 @@ GIOStream *soup_socket_get_iostream   (SoupSocket *sock);
 
 #define SOUP_SOCKET_CLEAN_DISPOSE "clean-dispose"
 #define SOUP_SOCKET_PROXY_RESOLVER "proxy-resolver"
+#define SOUP_SOCKET_CLOSE_ON_DISPOSE "close-on-dispose"
 SoupURI *soup_socket_get_http_proxy_uri (SoupSocket *sock);
 
 /* At some point it might be possible to mark additional methods
