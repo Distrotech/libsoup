@@ -75,6 +75,7 @@ struct SoupClientContext {
 	char           *auth_user;
 
 	int             ref_count;
+	gboolean        stole_connection;
 };
 
 typedef struct {
@@ -884,8 +885,15 @@ request_finished (SoupMessage *msg, gboolean io_complete, gpointer user_data)
 		       0, msg, client);
 
 	soup_client_context_cleanup (client);
-	if (io_complete && soup_socket_is_connected (sock) &&
-	    soup_message_is_keepalive (msg)) {
+
+	if (client->stole_connection) {
+		g_object_set (G_OBJECT (sock),
+			      SOUP_SOCKET_CLOSE_ON_DISPOSE, FALSE,
+			      NULL);
+		soup_client_context_unref (client);
+	} else if (io_complete &&
+		   soup_socket_is_connected (sock) &&
+		   soup_message_is_keepalive (msg)) {
 		/* Start a new request */
 		start_request (server, client);
 	} else {
@@ -1348,6 +1356,35 @@ soup_client_context_get_auth_user (SoupClientContext *client)
 }
 
 /**
+ * soup_client_context_steal_connection:
+ * @client: a #SoupClientContext
+ *
+ * "Steals" the HTTP connection associated with @client from its
+ * #SoupServer. Note that this happens immediately, regardless of the
+ * current state of the connection; if the response to the current
+ * #SoupMessage has not yet finished being sent, then it will be
+ * discarded; you can steal the connection from a
+ * #SoupMessage:finished or #SoupServer:request-finished handler
+ * if you want to wait for the response to be sent.
+ *
+ * Return value: the #GIOStream connected to @client. No guarantees
+ *   are made about what kind of #GIOStream this is.
+ **/
+GIOStream *
+soup_client_context_steal_connection (SoupClientContext *client)
+{
+	g_return_val_if_fail (client != NULL, NULL);
+	g_return_val_if_fail (client->stole_connection == FALSE, NULL);
+
+	client->stole_connection = TRUE;
+
+	if (soup_message_io_in_progress (client->msg))
+		soup_message_io_finished (client->msg);
+
+	return soup_socket_get_iostream (client->sock);
+}
+
+/**
  * SoupServerCallback:
  * @server: the #SoupServer
  * @msg: the message being processed
@@ -1592,4 +1629,3 @@ soup_server_unpause_message (SoupServer *server,
 
 	soup_message_io_unpause (msg);
 }
-

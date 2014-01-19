@@ -106,11 +106,14 @@ void               soup_server_unpause_message (SoupServer           *server,
 
 /* Client context */
 
-SoupSocket     *soup_client_context_get_socket      (SoupClientContext *client);
-SoupAddress    *soup_client_context_get_address     (SoupClientContext *client);
-const char     *soup_client_context_get_host        (SoupClientContext *client);
-SoupAuthDomain *soup_client_context_get_auth_domain (SoupClientContext *client);
-const char     *soup_client_context_get_auth_user   (SoupClientContext *client);
+SoupSocket     *soup_client_context_get_socket       (SoupClientContext *client);
+SoupAddress    *soup_client_context_get_address      (SoupClientContext *client);
+const char     *soup_client_context_get_host         (SoupClientContext *client);
+SoupAuthDomain *soup_client_context_get_auth_domain  (SoupClientContext *client);
+const char     *soup_client_context_get_auth_user    (SoupClientContext *client);
+
+SOUP_AVAILABLE_IN_2_46
+GIOStream      *soup_client_context_steal_connection (SoupClientContext *client);
 
 G_END_DECLS
 
