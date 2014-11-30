@@ -8,6 +8,7 @@
 
 #include <libsoup/soup-types.h>
 #include <libsoup/soup-uri.h>
+#include <libsoup/soup-websocket-connection.h>
 
 G_BEGIN_DECLS
 
@@ -56,11 +57,17 @@ typedef struct {
 GType soup_server_get_type (void);
 
 typedef void (*SoupServerCallback) (SoupServer        *server,
-				    SoupMessage       *msg, 
+				    SoupMessage       *msg,
 				    const char        *path,
 				    GHashTable        *query,
 				    SoupClientContext *client,
 				    gpointer           user_data);
+
+typedef void (*SoupServerWebsocketCallback) (SoupServer              *server,
+					     SoupWebsocketConnection *connection,
+					     const char              *path,
+					     SoupClientContext       *client,
+					     gpointer                 user_data);
 
 #define SOUP_SERVER_TLS_CERTIFICATE "tls-certificate"
 #define SOUP_SERVER_RAW_PATHS       "raw-paths"
@@ -125,6 +132,16 @@ void            soup_server_add_auth_domain    (SoupServer         *server,
 					        SoupAuthDomain     *auth_domain);
 void            soup_server_remove_auth_domain (SoupServer         *server,
 					        SoupAuthDomain     *auth_domain);
+
+void            soup_server_add_websocket_handler    (SoupServer                   *server,
+						      const char                   *path,
+						      const char                   *origin,
+						      char                        **protocols,
+						      SoupServerWebsocketCallback   callback,
+						      gpointer                      user_data,
+						      GDestroyNotify                destroy);
+void            soup_server_remove_websocket_handler (SoupServer                   *server,
+						      const char                   *path);
 
 /* I/O */
 
