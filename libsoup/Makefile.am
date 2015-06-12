@@ -70,7 +70,8 @@ soup_headers =			\
 	soup-value-utils.h	\
 	soup-websocket.h	\
 	soup-websocket-connection.h	\
-	soup-xmlrpc.h
+	soup-xmlrpc.h		\
+	soup-xmlrpc-variant.h
 
 libsoupinclude_HEADERS =	\
 	$(soup_headers)		\
@@ -192,7 +193,8 @@ libsoup_2_4_la_SOURCES =		\
 	soup-version.c			\
 	soup-websocket.c		\
 	soup-websocket-connection.c	\
-	soup-xmlrpc.c
+	soup-xmlrpc.c			\
+	soup-xmlrpc-variant.c
 
 # TLD rules
 EXTRA_DIST += tld-parser.py
