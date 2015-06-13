@@ -44,6 +44,10 @@ gchar       *soup_xmlrpc_build_response       (GVariant          *value,
 gboolean     soup_xmlrpc_message_set_response (SoupMessage       *msg,
 					       GVariant          *value,
 					       GError           **error);
+void         soup_xmlrpc_message_set_fault    (SoupMessage       *msg,
+					       gint               fault_code,
+					       const gchar       *fault_format,
+					       ...) G_GNUC_PRINTF (3, 4);
 
 /* Utils */
 GVariant *soup_xmlrpc_new_custom   (const gchar *type,

@@ -424,7 +424,32 @@ soup_xmlrpc_set_fault (SoupMessage *msg, int fault_code,
 				   body, strlen (body));
 }
 
+/**
+ * soup_xmlrpc_message_set_fault:
+ * @msg: an XML-RPC request
+ * @fault_code: the fault code
+ * @fault_format: a printf()-style format string
+ * @...: the parameters to @fault_format
+ *
+ * Sets the status code and response body of @msg to indicate an
+ * unsuccessful XML-RPC call, with the error described by @fault_code
+ * and @fault_format.
+ **/
+void
+soup_xmlrpc_message_set_fault (SoupMessage *msg, int fault_code,
+			       const char *fault_format, ...)
+{
+	va_list args;
+	char *body;
 
+	va_start (args, fault_format);
+	body = soup_xmlrpc_build_faultv (fault_code, fault_format, args);
+	va_end (args);
+
+	soup_message_set_status (msg, SOUP_STATUS_OK);
+	soup_message_set_response (msg, "text/xml", SOUP_MEMORY_TAKE,
+				   body, strlen (body));
+}
 
 static gboolean
 parse_value (xmlNode *xmlvalue, GValue *value)
