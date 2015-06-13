@@ -45,7 +45,10 @@ gboolean     soup_xmlrpc_message_set_response (SoupMessage       *msg,
 					       GVariant          *value,
 					       GError           **error);
 
-
+/* Utils */
+GVariant *soup_xmlrpc_new_custom   (const gchar *type,
+				    const gchar *value);
+GVariant *soup_xmlrpc_new_datetime (time_t       timestamp);
 
 G_END_DECLS
 

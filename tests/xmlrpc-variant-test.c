@@ -87,7 +87,7 @@ test_serializer (void)
 		"</params>");
 	verify_serialization (g_variant_new ("(@*)", soup_xmlrpc_new_datetime (1434161309)),
 		"<params>"
-		"<param><value><dateTime.iso8601>2015-06-13T02:08:29Z</dateTime.iso8601></value></param>"
+		"<param><value><dateTime.iso8601>20150613T02:08:29</dateTime.iso8601></value></param>"
 		"</params>");
 	verify_serialization (g_variant_new ("(s)", "<>&"),
 		"<params>"

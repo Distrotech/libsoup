@@ -178,10 +178,26 @@ insert_value (xmlNode *parent, GVariant *value, GError **error)
 
 		break;
 	}
-	case G_VARIANT_CLASS_TUPLE:
+	case G_VARIANT_CLASS_TUPLE: {
+		/* Special case for custom types */
+		if (g_variant_is_of_type (value, G_VARIANT_TYPE ("(oss)"))) {
+			const gchar *path;
+			const gchar *type;
+			const gchar *v;
+
+			g_variant_get (value, "(&o&s&s)", &path, &type, &v);
+			if (g_str_equal (path, "/org/gnome/libsoup/ExtensionType")) {
+				xmlNewTextChild (xvalue, NULL,
+				                 (const xmlChar *)type,
+				                 (const xmlChar *)v);
+				break;
+			}
+		}
+
 		if (!insert_array (xvalue, value, error))
 			return FALSE;
 		break;
+	}
 	case G_VARIANT_CLASS_DICT_ENTRY: {
 		xmlNode *node;
 
@@ -234,10 +250,8 @@ fail:
  *  - "a{s*}" are serialized as &lt;struct&gt;
  *  - "ay" are serialized as &lt;base64&gt;
  *  - tuples are serialized as &lt;array&gt;
- *
- * It is not currently possible to build &lt;dateTime.iso8601&gt; values since
- * #GVariant does not have date/time type. If sending a date is required then
- * soup_xmlrpc_build_method_call() should be used instead.
+ *  - variants created by soup_xmlrpc_new_datetime() are serialized as
+ *    &lt;dateTime.iso8601&gt;
  *
  * If @params is floating, it is consumed.
  *
@@ -1242,4 +1256,46 @@ fail:
 	if (doc)
 		xmlFreeDoc (doc);
 	return value ? g_variant_ref_sink (value) : NULL;
+}
+
+/**
+ * soup_xmlrpc_new_custom:
+ * @type: name for the type node
+ * @value: value for the type node
+ *
+ * Construct a special #GVariant used to serialize a &lt;@type&gt;
+ * node containing @value. See soup_xmlrpc_build_request().
+ *
+ * Returns: a floating #GVariant.
+ */
+GVariant *
+soup_xmlrpc_new_custom (const gchar *type, const gchar *value)
+{
+	return g_variant_new ("(oss)", "/org/gnome/libsoup/ExtensionType",
+			      type, value);
+}
+
+/**
+ * soup_xmlrpc_new_datetime:
+ * @timestamp: a unix timestamp
+ *
+ * Construct a special #GVariant used to serialize a &lt;dateTime.iso8601&gt;
+ * node. See soup_xmlrpc_build_request().
+ *
+ * Returns: a floating #GVariant.
+ */
+GVariant *
+soup_xmlrpc_new_datetime (time_t timestamp)
+{
+	SoupDate *date;
+	GVariant *variant;
+	gchar *str;
+
+	date = soup_date_new_from_time_t (timestamp);
+	str = soup_date_to_string (date, SOUP_DATE_ISO8601_XMLRPC);
+	variant = soup_xmlrpc_new_custom ("dateTime.iso8601", str);
+	soup_date_free (date);
+	g_free (str);
+
+	return variant;
 }

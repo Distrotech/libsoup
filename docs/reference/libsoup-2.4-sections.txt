@@ -832,6 +832,8 @@ soup_form_encode_urlencoded_list
 <SUBSECTION>
 soup_xmlrpc_build_request
 soup_xmlrpc_message_new
+soup_xmlrpc_new_custom
+soup_xmlrpc_new_datetime
 <SUBSECTION>
 soup_xmlrpc_build_response
 soup_xmlrpc_message_set_response
