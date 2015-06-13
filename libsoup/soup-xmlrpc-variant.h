@@ -41,6 +41,9 @@ gchar       *soup_xmlrpc_parse_request_full   (const gchar       *method_call,
 					       GError           **error);
 gchar       *soup_xmlrpc_build_response       (GVariant          *value,
 					       GError           **error);
+gchar       *soup_xmlrpc_build_fault          (gint               fault_code,
+					       const gchar       *fault_format,
+					       ...) G_GNUC_PRINTF (2, 3);
 gboolean     soup_xmlrpc_message_set_response (SoupMessage       *msg,
 					       GVariant          *value,
 					       GError           **error);

@@ -248,21 +248,26 @@ fail:
  *
  * @params is a #GVariant tuple representing the method parameters.
  *
- * Limitations that will cause method to return %FALSE and set @error:
- *  - maybes and uint64 cannot be serialized.
- *  - Dictionaries must have string keys.
- *
- * Special cases:
- *  - "a{s*}" are serialized as &lt;struct&gt;
+ * Serialization details:
+ *  - "a{s*}" and "{s*}" are serialized as &lt;struct&gt;
  *  - "ay" are serialized as &lt;base64&gt;
- *  - tuples are serialized as &lt;array&gt;
- *  - variants created by soup_xmlrpc_new_datetime() are serialized as
+ *  - Other arrays and tuples are serialized as &lt;array&gt;
+ *  - booleans are serialized as &lt;boolean&gt;
+ *  - byte, int16, uint16 and int32 are serialized as &lt;int&gt;
+ *  - uint32 and int64 are serialized as nonstandard &lt;i8&gt;
+ *  - doubles are serialized as &lt;double&gt;
+ *  - Strings, object-paths and signatures are serialized as &lt;string&gt;
+ *  - Variants (i.e. "v" type) are unwrapped and their child is serialized.
+ *  - #GVariant created by soup_xmlrpc_new_datetime() are serialized as
  *    &lt;dateTime.iso8601&gt;
- *  - uint32 and int64 are serialized as unstandard &lt;i8&gt;
+ *  - Other types are not supported and will return %NULL and set @error.
+ *    This notably includes: uint64, maybes and dictionaries with non-string
+ *    keys.
  *
  * If @params is floating, it is consumed.
  *
  * Return value: the text of the methodCall, or %NULL on error.
+ * Since: 2.52
  **/
 gchar *
 soup_xmlrpc_build_request (const gchar *method_name,
@@ -336,6 +341,7 @@ fail:
  *
  * Returns: (transfer full): a #SoupMessage encoding the
  *  indicated XML-RPC request, or %NULL on error.
+ * Since: 2.52
  **/
 SoupMessage *
 soup_xmlrpc_message_new (const gchar *uri,
@@ -370,6 +376,7 @@ soup_xmlrpc_message_new (const gchar *uri,
  * If @value is floating, it is consumed.
  *
  * Returns: the text of the methodResponse, or %NULL on error.
+ * Since: 2.52
  **/
 gchar *
 soup_xmlrpc_build_response (GVariant *value, GError **error)
@@ -423,6 +430,7 @@ soup_xmlrpc_build_response (GVariant *value, GError **error)
  * If @value is floating, it is consumed.
  *
  * Returns: %TRUE on success, %FALSE otherwise.
+ * Since: 2.52
  **/
 gboolean
 soup_xmlrpc_message_set_response (SoupMessage *msg, GVariant *value, GError **error)
@@ -980,6 +988,8 @@ fail:
  *
  * Opaque structure containing an XML-RPC value. Can be parsed using
  * soup_xmlrpc_params_parse() and freed with soup_xmlrpc_params_free().
+ *
+ * Since: 2.52
  */
 struct _SoupXMLRPCParams
 {
@@ -991,6 +1001,8 @@ struct _SoupXMLRPCParams
  * @self: a SoupXMLRPCParams
  *
  * Free a #SoupXMLRPCParams returned by soup_xmlrpc_parse_request().
+ *
+ * Since: 2.52
  */
 void
 soup_xmlrpc_params_free (SoupXMLRPCParams *self)
@@ -1024,6 +1036,7 @@ soup_xmlrpc_params_new (xmlNode *node)
  * See soup_xmlrpc_parse_request_full() for deserialization details.
  *
  * Returns: (transfer full): a new #GVariant, or %NULL
+ * Since: 2.52
  */
 GVariant *
 soup_xmlrpc_params_parse (SoupXMLRPCParams *self,
@@ -1053,6 +1066,7 @@ soup_xmlrpc_params_parse (SoupXMLRPCParams *self,
  * instead.
  *
  * Returns: (transfer full): method's name, or %NULL on error.
+ * Since: 2.52
  **/
 gchar *
 soup_xmlrpc_parse_request (const gchar *method_call,
@@ -1122,11 +1136,7 @@ fail:
  * soup_xmlrpc_parse_request() should be used instead if the method name must be
  * known to determine @parameters' signature.
  *
- * Limitations that will cause method to return %NULL and set @error:
- *  - @signature must not have maybes.
- *  - Dictionaries must have string keys.
- *
- * Special cases:
+ * Deserialization details:
  *  - If @signalture is provided, &lt;int&gt and &lt;i4&gt can be deserialized
  *    to byte, int16, uint16, int32, uint32, int64, uint64 or handle. Otherwise
  *    it will be int32. If the value is out of range for the target type it will
@@ -1139,8 +1149,11 @@ fail:
  *  - &lt;string&gt; will be deserialized to "s". @signalture could define
  *    another type ("o" or "g").
  *  - &lt;dateTime.iso8601&gt; will be deserialized to int64 unix timestamp.
+ *  - @signature must not have maybes, otherwise an @error is returned.
+ *  - Dictionaries must have string keys, otherwise an @error is returned.
  *
  * Returns: (transfer full): method's name, or %NULL on error.
+ * Since: 2.52
  **/
 gchar *
 soup_xmlrpc_parse_request_full (const gchar *method_call,
@@ -1187,6 +1200,7 @@ soup_xmlrpc_parse_request_full (const gchar *method_call,
  * See soup_xmlrpc_parse_request_full() for deserialization details.
  *
  * Returns: (transfer full): a new #GVariant, or %NULL
+ * Since: 2.52
  **/
 GVariant *
 soup_xmlrpc_parse_response (const gchar *method_response,
@@ -1279,6 +1293,7 @@ fail:
  * node containing @value. See soup_xmlrpc_build_request().
  *
  * Returns: a floating #GVariant.
+ * Since: 2.52
  */
 GVariant *
 soup_xmlrpc_new_custom (const gchar *type, const gchar *value)
@@ -1295,6 +1310,7 @@ soup_xmlrpc_new_custom (const gchar *type, const gchar *value)
  * node. See soup_xmlrpc_build_request().
  *
  * Returns: a floating #GVariant.
+ * Since: 2.52
  */
 GVariant *
 soup_xmlrpc_new_datetime (time_t timestamp)
