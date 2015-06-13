@@ -227,6 +227,23 @@ test_deserializer (void)
 		"</params>");
 }
 
+static void
+test_fault (void)
+{
+	gchar *body;
+	GVariant *reply;
+	GError *error = NULL;
+
+	body = soup_xmlrpc_build_fault (1, "error: %s", "failed");
+	reply = soup_xmlrpc_parse_response (body, strlen (body), NULL, &error);
+	g_assert_error (error, SOUP_XMLRPC_FAULT, 1);
+	g_assert_cmpstr (error->message, ==, "error: failed");
+	g_assert (reply == NULL);
+
+	g_free (body);
+	g_clear_error (&error);
+}
+
 int
 main (int argc, char **argv)
 {
@@ -234,6 +251,7 @@ main (int argc, char **argv)
 
 	g_test_add_func ("/xmlrpc/variant/serializer", test_serializer);
 	g_test_add_func ("/xmlrpc/variant/deserializer", test_deserializer);
+	g_test_add_func ("/xmlrpc/variant/fault", test_fault);
 
 	return g_test_run ();
 }
