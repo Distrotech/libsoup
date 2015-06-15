@@ -93,12 +93,15 @@ test_serializer (void)
 		"<params>"
 		"<param><value><string>&lt;&gt;&amp;</string></value></param>"
 		"</params>");
+	verify_serialization (g_variant_new ("(u)", 0),
+		"<params>"
+		"<param><value><i8>0</i8></value></param>"
+		"</params>");
 
 	verify_serialization_fail (g_variant_new_parsed ("1"));
 	verify_serialization_fail (g_variant_new_parsed ("({1, 2},)"));
 	verify_serialization_fail (g_variant_new ("(mi)", NULL));
-	verify_serialization_fail (g_variant_new ("(u)", 0));
-	verify_serialization_fail (g_variant_new ("(t)", G_MAXUINT64));
+	verify_serialization_fail (g_variant_new ("(t)", 0));
 }
 
 static void
@@ -160,6 +163,8 @@ verify_deserialization_fail (const gchar *signature,
 static void
 test_deserializer (void)
 {
+	gchar *tmp;
+
 	verify_deserialization (g_variant_new_parsed ("@av []"),
 		NULL,
 		"<params/>");
@@ -212,6 +217,13 @@ test_deserializer (void)
 		"<params>"
 		"<param><value><int>255</int></value></param>"
 		"</params>");
+
+	tmp = g_strdup_printf ("<params>"
+		"<param><value><int>%"G_GUINT64_FORMAT"</int></value></param>"
+		"</params>", G_MAXUINT64);
+	verify_deserialization (g_variant_new ("(t)", G_MAXUINT64),
+		"(t)", tmp);
+	g_free (tmp);
 
 	verify_deserialization_fail ("(o)",
 		"<params>"

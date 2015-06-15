@@ -133,6 +133,14 @@ insert_value (xmlNode *parent, GVariant *value, GError **error)
 		snprintf (buf, sizeof (buf), "%d", g_variant_get_int32 (value));
 		type_str = "int";
 		break;
+	case G_VARIANT_CLASS_UINT32:
+		snprintf (buf, sizeof (buf), "%u", g_variant_get_uint32 (value));
+		type_str = "i8";
+		break;
+	case G_VARIANT_CLASS_INT64:
+		snprintf (buf, sizeof (buf), "%"G_GINT64_FORMAT, g_variant_get_int64 (value));
+		type_str = "i8";
+		break;
 	case G_VARIANT_CLASS_DOUBLE:
 		g_ascii_dtostr (buf, sizeof (buf), g_variant_get_double (value));
 		type_str = "double";
@@ -209,8 +217,6 @@ insert_value (xmlNode *parent, GVariant *value, GError **error)
 	}
 	case G_VARIANT_CLASS_HANDLE:
 	case G_VARIANT_CLASS_MAYBE:
-	case G_VARIANT_CLASS_UINT32:
-	case G_VARIANT_CLASS_INT64:
 	case G_VARIANT_CLASS_UINT64:
 	default:
 		g_set_error (error, SOUP_XMLRPC_ERROR, SOUP_XMLRPC_ERROR_ARGUMENTS,
@@ -243,7 +249,7 @@ fail:
  * @params is a #GVariant tuple representing the method parameters.
  *
  * Limitations that will cause method to return %FALSE and set @error:
- *  - maybes, uint32, int64 and uint64 cannot be serialized.
+ *  - maybes and uint64 cannot be serialized.
  *  - Dictionaries must have string keys.
  *
  * Special cases:
@@ -252,6 +258,7 @@ fail:
  *  - tuples are serialized as &lt;array&gt;
  *  - variants created by soup_xmlrpc_new_datetime() are serialized as
  *    &lt;dateTime.iso8601&gt;
+ *  - uint32 and int64 are serialized as unstandard &lt;i8&gt;
  *
  * If @params is floating, it is consumed.
  *
@@ -875,6 +882,11 @@ parse_value (xmlNode *node, const gchar **signature, GError **error)
 	} else if (g_str_equal (typename, "int") || g_str_equal (typename, "i4")) {
 		if (class == G_VARIANT_CLASS_VARIANT)
 			variant = parse_number (typenode, G_VARIANT_CLASS_INT32, error);
+		else
+			variant = parse_number (typenode, class, error);
+	} else if (g_str_equal (typename, "i8")) {
+		if (class == G_VARIANT_CLASS_VARIANT)
+			variant = parse_number (typenode, G_VARIANT_CLASS_INT64, error);
 		else
 			variant = parse_number (typenode, class, error);
 	} else  if (g_str_equal (typename, "double")) {
