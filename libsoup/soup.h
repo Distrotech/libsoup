@@ -53,7 +53,7 @@ extern "C" {
 #include <libsoup/soup-websocket.h>
 #include <libsoup/soup-websocket-connection.h>
 #include <libsoup/soup-xmlrpc.h>
-#include <libsoup/soup-xmlrpc-variant.h>
+#include <libsoup/soup-xmlrpc-gvalue.h>
 
 #ifdef __cplusplus
 }
