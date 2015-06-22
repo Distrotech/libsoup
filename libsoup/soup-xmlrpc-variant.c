@@ -107,8 +107,8 @@ static gboolean
 insert_value (xmlNode *parent, GVariant *value, GError **error)
 {
 	xmlNode *xvalue;
-	const gchar *type_str = NULL;
-	gchar buf[128];
+	const char *type_str = NULL;
+	char buf[128];
 
 	xvalue = xmlNewChild (parent, NULL, (const xmlChar *)"value", NULL);
 
@@ -189,9 +189,9 @@ insert_value (xmlNode *parent, GVariant *value, GError **error)
 	case G_VARIANT_CLASS_TUPLE: {
 		/* Special case for custom types */
 		if (g_variant_is_of_type (value, G_VARIANT_TYPE ("(oss)"))) {
-			const gchar *path;
-			const gchar *type;
-			const gchar *v;
+			const char *path;
+			const char *type;
+			const char *v;
 
 			g_variant_get (value, "(&o&s&s)", &path, &type, &v);
 			if (g_str_equal (path, "/org/gnome/libsoup/ExtensionType")) {
@@ -269,8 +269,8 @@ fail:
  * Return value: the text of the methodCall, or %NULL on error.
  * Since: 2.52
  **/
-gchar *
-soup_xmlrpc_build_request (const gchar *method_name,
+char *
+soup_xmlrpc_build_request (const char *method_name,
 			   GVariant    *params,
 			   GError     **error)
 {
@@ -279,8 +279,8 @@ soup_xmlrpc_build_request (const gchar *method_name,
 	xmlChar *xmlbody;
 	GVariantIter iter;
 	GVariant *child;
-	gint len;
-	gchar *body = NULL;
+	int len;
+	char *body = NULL;
 
 	g_variant_ref_sink (params);
 
@@ -344,13 +344,13 @@ fail:
  * Since: 2.52
  **/
 SoupMessage *
-soup_xmlrpc_message_new (const gchar *uri,
-			 const gchar *method_name,
+soup_xmlrpc_message_new (const char *uri,
+			 const char *method_name,
 			 GVariant    *params,
 			 GError     **error)
 {
 	SoupMessage *msg;
-	gchar *body;
+	char *body;
 
 	body = soup_xmlrpc_build_request (method_name, params, error);
 	if (!body)
@@ -378,14 +378,14 @@ soup_xmlrpc_message_new (const gchar *uri,
  * Returns: the text of the methodResponse, or %NULL on error.
  * Since: 2.52
  **/
-gchar *
+char *
 soup_xmlrpc_build_response (GVariant *value, GError **error)
 {
 	xmlDoc *doc;
 	xmlNode *node;
 	xmlChar *xmlbody;
-	gchar *body;
-	gint len;
+	char *body;
+	int len;
 
 	g_variant_ref_sink (value);
 
@@ -406,7 +406,7 @@ soup_xmlrpc_build_response (GVariant *value, GError **error)
 	}
 
 	xmlDocDumpMemory (doc, &xmlbody, &len);
-	body = g_strndup ((gchar *)xmlbody, len);
+	body = g_strndup ((char *)xmlbody, len);
 	xmlFree (xmlbody);
 
 	xmlFreeDoc (doc);
@@ -435,7 +435,7 @@ soup_xmlrpc_build_response (GVariant *value, GError **error)
 gboolean
 soup_xmlrpc_message_set_response (SoupMessage *msg, GVariant *value, GError **error)
 {
-	gchar *body;
+	char *body;
 
 	body = soup_xmlrpc_build_response (value, error);
 	if (!body)
@@ -447,7 +447,7 @@ soup_xmlrpc_message_set_response (SoupMessage *msg, GVariant *value, GError **er
 	return TRUE;
 }
 
-static GVariant *parse_value (xmlNode *node, const gchar **signature, GError **error);
+static GVariant *parse_value (xmlNode *node, const char **signature, GError **error);
 
 static xmlNode *
 find_real_node (xmlNode *node)
@@ -458,12 +458,12 @@ find_real_node (xmlNode *node)
 	return node;
 }
 
-static gchar *
-signature_get_next_complete_type (const gchar **signature)
+static char *
+signature_get_next_complete_type (const char **signature)
 {
 	GVariantClass class;
-	const gchar *initial_signature;
-	gchar *result;
+	const char *initial_signature;
+	char *result;
 
 	/* here it is assumed that 'signature' is a valid type string */
 
@@ -471,7 +471,7 @@ signature_get_next_complete_type (const gchar **signature)
 	class = (*signature)[0];
 
 	if (class == G_VARIANT_CLASS_TUPLE || class == G_VARIANT_CLASS_DICT_ENTRY) {
-		gchar stack[256] = {0};
+		char stack[256] = {0};
 		guint stack_len = 0;
 
 		do {
@@ -492,7 +492,7 @@ signature_get_next_complete_type (const gchar **signature)
 
 		(*signature)++;
 	} else if (class == G_VARIANT_CLASS_ARRAY || class == G_VARIANT_CLASS_MAYBE) {
-		gchar *tmp_sig;
+		char *tmp_sig;
 
 		(*signature)++;
 		tmp_sig = signature_get_next_complete_type (signature);
@@ -507,12 +507,12 @@ signature_get_next_complete_type (const gchar **signature)
 }
 
 static GVariant *
-parse_array (xmlNode *node, const gchar **signature, GError **error)
+parse_array (xmlNode *node, const char **signature, GError **error)
 {
 	GVariant *variant = NULL;
-	gchar *child_signature = NULL;
-	gchar *array_signature = NULL;
-	const gchar *tmp_signature;
+	char *child_signature = NULL;
+	char *array_signature = NULL;
+	const char *tmp_signature;
 	gboolean is_tuple = FALSE;
 	xmlNode *member;
 	GVariantBuilder builder;
@@ -611,12 +611,12 @@ fail:
 }
 
 static void
-parse_dict_entry_signature (const gchar **signature,
-			    gchar       **entry_signature,
-			    gchar       **key_signature,
-			    gchar       **value_signature)
+parse_dict_entry_signature (const char **signature,
+			    char       **entry_signature,
+			    char       **key_signature,
+			    char       **value_signature)
 {
-	const gchar *tmp_sig;
+	const char *tmp_sig;
 
 	if (signature)
 		*entry_signature = signature_get_next_complete_type (signature);
@@ -629,13 +629,13 @@ parse_dict_entry_signature (const gchar **signature,
 }
 
 static GVariant *
-parse_dictionary (xmlNode *node, const gchar **signature, GError **error)
+parse_dictionary (xmlNode *node, const char **signature, GError **error)
 {
 	GVariant *variant = NULL;
-	gchar *dict_signature;
-	gchar *entry_signature;
-	gchar *key_signature;
-	gchar *value_signature;
+	char *dict_signature;
+	char *entry_signature;
+	char *key_signature;
+	char *value_signature;
 	GVariantBuilder builder;
 	xmlNode *member;
 
@@ -663,7 +663,7 @@ parse_dictionary (xmlNode *node, const gchar **signature, GError **error)
 	     member;
 	     member = find_real_node (member->next)) {
 		xmlNode *child, *mname, *mxval;
-		const gchar *tmp_signature;
+		const char *tmp_signature;
 		GVariant *value;
 		xmlChar *content;
 
@@ -728,14 +728,14 @@ static GVariant *
 parse_number (xmlNode *typenode, GVariantClass class, GError **error)
 {
 	xmlChar *content;
-	const gchar *str;
-	gchar *endptr;
+	const char *str;
+	char *endptr;
 	gint64 num = 0;
 	guint64 unum = 0;
 	GVariant *variant = NULL;
 
 	content = xmlNodeGetContent (typenode);
-	str = (const gchar *) content;
+	str = (const char *) content;
 
 	errno = 0;
 
@@ -795,7 +795,7 @@ G_STMT_START{ \
 	default:
 		g_set_error (error, SOUP_XMLRPC_ERROR, SOUP_XMLRPC_ERROR_ARGUMENTS,
 			     "<%s> node does not match signature",
-			     (const gchar *)typenode->name);
+			     (const char *)typenode->name);
 		goto fail;
 	}
 
@@ -810,12 +810,12 @@ parse_double (xmlNode *typenode, GError **error)
 {
 	GVariant *variant = NULL;
 	xmlChar *content;
-	const gchar *str;
-	gchar *endptr;
+	const char *str;
+	char *endptr;
 	gdouble d;
 
 	content = xmlNodeGetContent (typenode);
-	str = (const gchar *) content;
+	str = (const char *) content;
 
 	errno = 0;
 	d = g_ascii_strtod (str, &endptr);
@@ -853,10 +853,10 @@ parse_base64 (xmlNode *typenode, GError **error)
 }
 
 static GVariant *
-parse_value (xmlNode *node, const gchar **signature, GError **error)
+parse_value (xmlNode *node, const char **signature, GError **error)
 {
 	xmlNode *typenode;
-	const gchar *typename;
+	const char *typename;
 	xmlChar *content = NULL;
 	GVariant *variant = NULL;
 	GVariantClass class = G_VARIANT_CLASS_VARIANT;
@@ -907,13 +907,13 @@ parse_value (xmlNode *node, const gchar **signature, GError **error)
 	} else  if (g_str_equal (typename, "string")) {
 		content = xmlNodeGetContent (typenode);
 		if (class == G_VARIANT_CLASS_VARIANT || class == G_VARIANT_CLASS_STRING)
-			variant = g_variant_new_string ((const gchar *)content);
+			variant = g_variant_new_string ((const char *)content);
 		else if (class == G_VARIANT_CLASS_OBJECT_PATH &&
-			 g_variant_is_object_path ((const gchar *)content))
-			variant = g_variant_new_object_path ((const gchar *)content);
+			 g_variant_is_object_path ((const char *)content))
+			variant = g_variant_new_object_path ((const char *)content);
 		else if (class == G_VARIANT_CLASS_SIGNATURE &&
-			 g_variant_is_signature ((const gchar *)content))
-			variant = g_variant_new_signature ((const gchar *)content);
+			 g_variant_is_signature ((const char *)content))
+			variant = g_variant_new_signature ((const char *)content);
 		else {
 			g_set_error (error, SOUP_XMLRPC_ERROR, SOUP_XMLRPC_ERROR_ARGUMENTS,
 				     "<string> node does not match signature");
@@ -957,7 +957,7 @@ parse_value (xmlNode *node, const gchar **signature, GError **error)
 		}
 
 		content = xmlNodeGetContent (node);
-		if (!g_time_val_from_iso8601 ((gchar *)content, &t)) {
+		if (!g_time_val_from_iso8601 ((char *)content, &t)) {
 			g_set_error (error, SOUP_XMLRPC_ERROR, SOUP_XMLRPC_ERROR_ARGUMENTS,
 				     "Couldn't parse date: %s", content);
 			goto fail;
@@ -1040,7 +1040,7 @@ soup_xmlrpc_params_new (xmlNode *node)
  */
 GVariant *
 soup_xmlrpc_params_parse (SoupXMLRPCParams *self,
-			  const gchar      *signature,
+			  const char      *signature,
 			  GError          **error)
 {
 	GVariant *value = NULL;
@@ -1068,16 +1068,16 @@ soup_xmlrpc_params_parse (SoupXMLRPCParams *self,
  * Returns: (transfer full): method's name, or %NULL on error.
  * Since: 2.52
  **/
-gchar *
-soup_xmlrpc_parse_request (const gchar *method_call,
-			   gint length,
+char *
+soup_xmlrpc_parse_request (const char *method_call,
+			   int length,
 			   SoupXMLRPCParams **params,
 			   GError **error)
 {
 	xmlDoc *doc = NULL;
 	xmlNode *node;
 	xmlChar *xmlMethodName = NULL;
-	gchar *method_name = NULL;
+	char *method_name = NULL;
 
 	doc = xmlParseMemory (method_call,
 				  length == -1 ? strlen (method_call) : length);
@@ -1088,7 +1088,7 @@ soup_xmlrpc_parse_request (const gchar *method_call,
 	}
 
 	node = xmlDocGetRootElement (doc);
-	if (!node || strcmp ((const gchar *)node->name, "methodCall") != 0) {
+	if (!node || strcmp ((const char *)node->name, "methodCall") != 0) {
 		g_set_error (error, SOUP_XMLRPC_ERROR, SOUP_XMLRPC_ERROR_ARGUMENTS,
 			     "<methodCall> node expected");
 		goto fail;
@@ -1104,7 +1104,7 @@ soup_xmlrpc_parse_request (const gchar *method_call,
 
 	if (params) {
 		node = find_real_node (node->next);
-		if (!node || strcmp ((const gchar *)node->name, "params") != 0) {
+		if (!node || strcmp ((const char *)node->name, "params") != 0) {
 			g_set_error (error, SOUP_XMLRPC_ERROR, SOUP_XMLRPC_ERROR_ARGUMENTS,
 				     "<params> node expected");
 			goto fail;
@@ -1113,7 +1113,7 @@ soup_xmlrpc_parse_request (const gchar *method_call,
 		doc = NULL;
 	}
 
-	method_name = g_strdup ((gchar *)xmlMethodName);
+	method_name = g_strdup ((char *)xmlMethodName);
 
 fail:
 	if (doc)
@@ -1155,14 +1155,14 @@ fail:
  * Returns: (transfer full): method's name, or %NULL on error.
  * Since: 2.52
  **/
-gchar *
-soup_xmlrpc_parse_request_full (const gchar *method_call,
-				gint         length,
-				const gchar *signature,
+char *
+soup_xmlrpc_parse_request_full (const char *method_call,
+				int         length,
+				const char *signature,
 				GVariant   **parameters,
 				GError     **error)
 {
-	gchar *method_name;
+	char *method_name;
 	SoupXMLRPCParams *params;
 
 	method_name = soup_xmlrpc_parse_request (method_call,
@@ -1203,9 +1203,9 @@ soup_xmlrpc_parse_request_full (const gchar *method_call,
  * Since: 2.52
  **/
 GVariant *
-soup_xmlrpc_parse_response (const gchar *method_response,
-			    gint length,
-			    const gchar *signature,
+soup_xmlrpc_parse_response (const char *method_response,
+			    int length,
+			    const char *signature,
 			    GError **error)
 {
 	xmlDoc *doc = NULL;
@@ -1296,7 +1296,7 @@ fail:
  * Since: 2.52
  */
 GVariant *
-soup_xmlrpc_new_custom (const gchar *type, const gchar *value)
+soup_xmlrpc_new_custom (const char *type, const gchar *value)
 {
 	return g_variant_new ("(oss)", "/org/gnome/libsoup/ExtensionType",
 			      type, value);
@@ -1317,7 +1317,7 @@ soup_xmlrpc_new_datetime (time_t timestamp)
 {
 	SoupDate *date;
 	GVariant *variant;
-	gchar *str;
+	char *str;
 
 	date = soup_date_new_from_time_t (timestamp);
 	str = soup_date_to_string (date, SOUP_DATE_ISO8601_XMLRPC);

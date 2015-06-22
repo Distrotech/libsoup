@@ -13,11 +13,11 @@
 
 static void
 verify_serialization (GVariant    *value,
-		      const gchar *expected_params)
+		      const char *expected_params)
 {
-	gchar *debug;
-	gchar *body;
-	gchar *params;
+	char *debug;
+	char *body;
+	char *params;
 	GError *error = NULL;
 
 	debug = g_variant_print (value, TRUE);
@@ -45,7 +45,7 @@ verify_serialization (GVariant    *value,
 static void
 verify_serialization_fail (GVariant *value)
 {
-	gchar *body;
+	char *body;
 	GError *error = NULL;
 
 	body = soup_xmlrpc_build_request ("MyMethod", value, &error);
@@ -106,11 +106,11 @@ test_serializer (void)
 
 static void
 verify_deserialization (GVariant *expected_variant,
-			const gchar *signature,
-			const gchar *params)
+			const char *signature,
+			const char *params)
 {
-	gchar *body;
-	gchar *method_name;
+	char *body;
+	char *method_name;
 	GVariant *variant;
 	GError *error = NULL;
 
@@ -123,7 +123,7 @@ verify_deserialization (GVariant *expected_variant,
 	g_assert_cmpstr (method_name, ==, "MyMethod");
 
 	if (!g_variant_equal (variant, expected_variant)) {
-		gchar *str1, *str2;
+		char *str1, *str2;
 
 		str1 = g_variant_print (expected_variant, TRUE);
 		str2 = g_variant_print (variant, TRUE);
@@ -141,11 +141,11 @@ verify_deserialization (GVariant *expected_variant,
 }
 
 static void
-verify_deserialization_fail (const gchar *signature,
-			     const gchar *params)
+verify_deserialization_fail (const char *signature,
+			     const char *params)
 {
-	gchar *body;
-	gchar *method_name;
+	char *body;
+	char *method_name;
 	GVariant *variant;
 	GError *error = NULL;
 
@@ -163,7 +163,7 @@ verify_deserialization_fail (const gchar *signature,
 static void
 test_deserializer (void)
 {
-	gchar *tmp;
+	char *tmp;
 
 	verify_deserialization (g_variant_new_parsed ("@av []"),
 		NULL,
@@ -242,7 +242,7 @@ test_deserializer (void)
 static void
 test_fault (void)
 {
-	gchar *body;
+	char *body;
 	GVariant *reply;
 	GError *error = NULL;
 
