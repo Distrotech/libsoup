@@ -1180,8 +1180,21 @@ soup_xmlrpc_params_parse (SoupXMLRPCParams *self,
 	g_return_val_if_fail (self, NULL);
 	g_return_val_if_fail (!signature || g_variant_type_string_is_valid (signature), NULL);
 
-	value = parse_value (self->node, signature ? &signature : NULL, error);
+	if (!self->node) {
+		if (!signature || g_variant_type_equal (G_VARIANT_TYPE (signature), G_VARIANT_TYPE ("av")))
+			value = g_variant_new_array (G_VARIANT_TYPE_VARIANT, NULL, 0);
+		else if (g_variant_type_equal (G_VARIANT_TYPE (signature), G_VARIANT_TYPE_UNIT))
+			value = g_variant_new_tuple (NULL, 0);
+		else {
+			g_set_error (error, SOUP_XMLRPC_ERROR, SOUP_XMLRPC_ERROR_ARGUMENTS,
+				     "Invalid signature '%s', was expecting '()'", signature);
+			goto fail;
+		}
+	} else {
+		value = parse_value (self->node, signature ? &signature : NULL, error);
+	}
 
+fail:
 	return value ? g_variant_ref_sink (value) : NULL;
 }
 
@@ -1236,13 +1249,17 @@ soup_xmlrpc_parse_request (const char *method_call,
 
 	if (params) {
 		node = find_real_node (node->next);
-		if (!node || strcmp ((const char *)node->name, "params") != 0) {
-			g_set_error (error, SOUP_XMLRPC_ERROR, SOUP_XMLRPC_ERROR_ARGUMENTS,
-				     "<params> node expected");
-			goto fail;
+		if (node) {
+			if (strcmp ((const char *)node->name, "params") != 0) {
+				g_set_error (error, SOUP_XMLRPC_ERROR, SOUP_XMLRPC_ERROR_ARGUMENTS,
+					     "<params> node expected");
+				goto fail;
+			}
+			*params = soup_xmlrpc_params_new (node);
+			doc = NULL;
+		} else {
+			*params = soup_xmlrpc_params_new (NULL);
 		}
-		*params = soup_xmlrpc_params_new (node);
-		doc = NULL;
 	}
 
 	method_name = g_strdup ((char *)xmlMethodName);
