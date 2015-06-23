@@ -43,6 +43,7 @@ test_programs =			\
 	uri-parsing		\
 	websocket-test		\
 	xmlrpc-test		\
+	xmlrpc-server-test	\
 	xmlrpc-gvalue-server-test\
 	xmlrpc-gvalue-test
 
