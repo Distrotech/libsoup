@@ -1082,7 +1082,7 @@ parse_value (xmlNode *node, const char **signature, GError **error)
 		if (class != G_VARIANT_CLASS_VARIANT &&
 		    class != G_VARIANT_CLASS_INT64) {
 			g_set_error (error, SOUP_XMLRPC_ERROR, SOUP_XMLRPC_ERROR_ARGUMENTS,
-				     "<dateTime.iso8601> node does not match signalture");
+				     "<dateTime.iso8601> node does not match signature");
 			goto fail;
 		}
 
@@ -1267,16 +1267,16 @@ fail:
  * known to determine @parameters' signature.
  *
  * Deserialization details:
- *  - If @signalture is provided, &lt;int&gt and &lt;i4&gt can be deserialized
+ *  - If @signature is provided, &lt;int&gt and &lt;i4&gt can be deserialized
  *    to byte, int16, uint16, int32, uint32, int64, uint64 or handle. Otherwise
  *    it will be int32. If the value is out of range for the target type it will
  *    return an @error.
- *  - &lt;struct&gt; will be deserialized to "a{sv}". @signalture could define
+ *  - &lt;struct&gt; will be deserialized to "a{sv}". @signature could define
  *    another value type (e.g. "a{ss}").
- *  - &lt;array&gt; will be deserialized to "av". @signalture could define
+ *  - &lt;array&gt; will be deserialized to "av". @signature could define
  *    another element type (e.g. "as") or could be a tuple (e.g. "(ss)").
  *  - &lt;base64&gt; will be deserialized to "ay".
- *  - &lt;string&gt; will be deserialized to "s". @signalture could define
+ *  - &lt;string&gt; will be deserialized to "s". @signature could define
  *    another type ("o" or "g").
  *  - &lt;dateTime.iso8601&gt; will be deserialized to int64 unix timestamp.
  *  - @signature must not have maybes, otherwise an @error is returned.
