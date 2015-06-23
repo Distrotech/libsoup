@@ -53,6 +53,9 @@
  * Deprecated: Use #GVariant API instead.
  **/
 
+/* This whole file is deprecated and replaced by GVariant API */
+G_GNUC_BEGIN_IGNORE_DEPRECATIONS
+
 static void
 soup_value_hash_value_free (gpointer val)
 {
@@ -522,3 +525,5 @@ soup_byte_array_free (GByteArray *ba)
  **/
 typedef GByteArray SoupByteArray;
 G_DEFINE_BOXED_TYPE (SoupByteArray, soup_byte_array, soup_byte_array_copy, soup_byte_array_free)
+
+G_GNUC_END_IGNORE_DEPRECATIONS
