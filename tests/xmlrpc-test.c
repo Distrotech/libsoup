@@ -189,10 +189,10 @@ test_deserializer (void)
 		"<member><name>one</name><value><int>1</int></value></member>"
 		"<member><name>two</name><value><int>2</int></value></member>"
 		"</struct></value></param></params>");
-	verify_deserialization (g_variant_new_parsed ("[<int64 1434161309>]"),
+	verify_deserialization (g_variant_new_parsed ("[<int64 1434146909>]"),
 		NULL,
 		"<params>"
-		"<param><value><dateTime.iso8601>2015-06-12T22:08:29-04:00</dateTime.iso8601></value></param>"
+		"<param><value><dateTime.iso8601>20150612T22:08:29</dateTime.iso8601></value></param>"
 		"</params>");
 	verify_deserialization (g_variant_new_parsed ("[<b'bytestring'>]"),
 		NULL,

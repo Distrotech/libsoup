@@ -1077,7 +1077,7 @@ parse_value (xmlNode *node, const char **signature, GError **error)
 		}
 		variant = parse_array (typenode, signature, error);
 	} else if (g_str_equal (typename, "dateTime.iso8601")) {
-		GTimeVal t;
+		SoupDate *date;
 
 		if (class != G_VARIANT_CLASS_VARIANT &&
 		    class != G_VARIANT_CLASS_INT64) {
@@ -1086,14 +1086,16 @@ parse_value (xmlNode *node, const char **signature, GError **error)
 			goto fail;
 		}
 
-		content = xmlNodeGetContent (node);
-		if (!g_time_val_from_iso8601 ((char *)content, &t)) {
+		content = xmlNodeGetContent (typenode);
+		date = soup_date_new_from_string ((char *)content);
+		if (!date) {
 			g_set_error (error, SOUP_XMLRPC_ERROR, SOUP_XMLRPC_ERROR_ARGUMENTS,
 				     "Couldn't parse date: %s", content);
 			goto fail;
 		}
 
-		variant = g_variant_new_int64 (t.tv_sec);
+		variant = g_variant_new_int64 (soup_date_to_time_t (date));
+		soup_date_free (date);
 	} else {
 		g_set_error (error, SOUP_XMLRPC_ERROR, SOUP_XMLRPC_ERROR_ARGUMENTS,
 			     "Unknown node name %s", typename);
