@@ -329,13 +329,43 @@ AC_ARG_ENABLE(more-warnings,
 	      set_more_warnings=no)
 
 if test "$GCC" = "yes" -a "$set_more_warnings" != "no"; then
-	CFLAGS="$CFLAGS \
-		-Wall -Wstrict-prototypes -Werror=missing-prototypes \
-		-Werror=implicit-function-declaration \
-		-Werror=pointer-arith -Werror=init-self -Werror=format=2 \
-		-Wno-format-zero-length \
-		-Werror=missing-include-dirs -Werror=aggregate-return \
-		-Werror=declaration-after-statement"
+	# Compiler options
+	AX_APPEND_COMPILE_FLAGS([ \
+	    -Wall \
+	    -Wcast-align \
+	    -Wdeclaration-after-statement \
+	    -Wempty-body \
+	    -Werror=format-security \
+	    -Werror=format=2 \
+	    -Werror=aggregate-return \
+	    -Werror=pointer-arith \
+	    -Werror=implicit-function-declaration \
+	    -Werror=missing-prototypes \
+	    -Wextra \
+	    -Wformat \
+	    -Wformat-nonliteral \
+	    -Wformat-security \
+	    -Winit-self \
+	    -Wmisleading-indentation \
+	    -Wmissing-include-dirs \
+	    -Wshift-negative-value \
+	    -Wnested-externs \
+	    -Wno-missing-field-initializers \
+	    -Wno-sign-compare \
+	    -Wno-strict-aliasing \
+	    -Wno-uninitialized \
+	    -Wno-unused-parameter \
+	    -Wpointer-arith \
+	    -Wredundant-decls \
+	    -Wreturn-type \
+	    -Wshadow \
+	    -Wswitch-default \
+	    -Wswitch-enum \
+	    -Wundef \
+	    -Wuninitialized \
+	    -Wno-format-zero-length \
+	    -Wstrict-prototypes \
+	])
 fi
 
 dnl *************************
