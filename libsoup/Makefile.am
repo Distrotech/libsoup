@@ -20,7 +20,8 @@ AM_CPPFLAGS = 				\
 	$(GLIB_CFLAGS)			\
 	$(XML_CFLAGS)			\
 	$(SQLITE_CFLAGS)		\
-	$(CODE_COVERAGE_CFLAGS)
+	$(CODE_COVERAGE_CFLAGS)		\
+	$(KRB5_CFLAGS)
 
 libsoupincludedir = $(includedir)/libsoup-2.4/libsoup
 
@@ -110,6 +111,8 @@ libsoup_2_4_la_SOURCES =		\
 	soup-auth-digest.c		\
 	soup-auth-ntlm.h		\
 	soup-auth-ntlm.c		\
+	soup-auth-negotiate.h		\
+	soup-auth-negotiate.c		\
 	soup-auth-domain.c		\
 	soup-auth-domain-basic.c	\
 	soup-auth-domain-digest.c	\
@@ -239,6 +242,26 @@ libsoup_gnome_2_4_la_SOURCES =		\
 	soup-proxy-resolver-gnome.c	\
 	soup-password-manager-gnome.h	\
 	soup-password-manager-gnome.c
+
+endif
+
+if BUILD_LIBSOUP_GSSAPI
+
+lib_LTLIBRARIES += libsoup-gssapi-2.4.la
+
+libsoup_gssapi_2_4_la_LDFLAGS =	\
+	-version-info $(SOUP_CURRENT):$(SOUP_REVISION):$(SOUP_AGE) \
+	-no-undefined \
+	-export-symbols $(srcdir)/libsoup-gssapi-2.4.sym
+
+EXTRA_DIST += libsoup-gssapi-2.4.sym
+
+libsoup_gssapi_2_4_la_LIBADD =		\
+	$(KRB5_LIBS)			\
+	$(GLIB_LIBS)
+
+libsoup_gssapi_2_4_la_SOURCES =		\
+	soup-gssapi.c
 
 endif
 

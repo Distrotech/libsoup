@@ -1,0 +1,3 @@
+soup_gss_client_init
+soup_gss_client_step
+soup_gss_client_cleanup

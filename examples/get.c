@@ -89,7 +89,7 @@ get_url (const char *url)
 }
 
 static const char *ca_file, *proxy;
-static gboolean synchronous, ntlm;
+static gboolean synchronous, ntlm, negotiate;
 
 static GOptionEntry entries[] = {
 	{ "ca-file", 'c', 0,
@@ -104,6 +104,9 @@ static GOptionEntry entries[] = {
 	{ "ntlm", 'n', 0,
 	  G_OPTION_ARG_NONE, &ntlm,
 	  "Use NTLM authentication", NULL },
+	{ "negotiate", 'N', 0,
+	  G_OPTION_ARG_NONE, &negotiate,
+	  "Use Negotiate authentication", NULL },
 	{ "output", 'o', 0,
 	  G_OPTION_ARG_STRING, &output_file_path,
 	  "Write the received data to FILE instead of stdout", "FILE" },
@@ -181,6 +184,11 @@ main (int argc, char **argv)
 			      SOUP_SESSION_PROXY_URI, proxy_uri,
 			      NULL);
 		soup_uri_free (proxy_uri);
+	}
+
+	if (negotiate) {
+		soup_session_add_feature_by_type(session,
+						 SOUP_TYPE_AUTH_NEGOTIATE);
 	}
 
 	if (!synchronous)

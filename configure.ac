@@ -317,6 +317,21 @@ AC_DEFINE_UNQUOTED(NTLM_AUTH, "$ntlm_auth", [Samba's 'winbind' daemon helper 'nt
 
 AX_CODE_COVERAGE
 
+dnl **********************
+dnl *** GSSAPI support ***
+dnl **********************
+AC_PATH_PROG([KRB5_CONFIG], krb5-config, none, $PATH:/usr/kerberos/bin)
+if test "x$KRB5_CONFIG" != "xnone"; then
+    KRB5_LIBS="`${KRB5_CONFIG} --libs gssapi`"
+    KRB5_CFLAGS="`${KRB5_CONFIG} --cflags gssapi`"
+    AC_SUBST(KRB5_CFLAGS)
+    AC_SUBST(KRB5_LIBS)
+    if test "$KRB5_CONFIG" != none; then
+        AC_DEFINE(HAVE_GSSAPI, 1, [Whether or not gssapi libs are available])
+    fi
+fi
+AM_CONDITIONAL(BUILD_LIBSOUP_GSSAPI, test $KRB5_CONFIG != none)
+
 dnl ****************************************************
 dnl *** Warnings to show if using GCC                ***
 dnl *** (do this last so -Werror won't mess up tests ***
