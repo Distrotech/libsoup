@@ -162,7 +162,6 @@ soup_auth_negotiate_is_ready (SoupAuth *auth,
 static void
 check_server_response(SoupMessage *msg, gpointer state)
 {
-	gchar **parts, *p;
 	gint ret;
 	const char *auth_headers;
 	SoupNegotiateConnectionState *conn = state;
@@ -174,19 +173,13 @@ check_server_response(SoupMessage *msg, gpointer state)
 	/* FIXME: need to check for proxy-auth too */
 	auth_headers = soup_message_headers_get_one (msg->response_headers,
 						     "WWW-Authenticate");
-	parts = g_strsplit (auth_headers, " ", 0);
-	if (g_strv_length (parts) != 2) {
+	if (!auth_headers || g_ascii_strncasecmp (auth_headers, "Negotiate ", 10) != 0) {
 		g_warning ("Failed to parse auth header %s", auth_headers);
 		conn->state = SOUP_NEGOTIATE_FAILED;
 		goto out;
 	}
-	if (g_ascii_strcasecmp (parts[0], "Negotiate")) {
-		g_warning ("Failed to parse auth header %s", auth_headers);
-		conn->state = SOUP_NEGOTIATE_FAILED;
-	}
 
-	p = parts[1];
-	ret = soup_gssapi_syms.client_step (conn, p, &err);
+	ret = soup_gssapi_syms.client_step (conn, auth_headers + 10, &err);
 
 	if (ret != AUTH_GSS_COMPLETE) {
 		g_warning ("%s", err->message);
@@ -194,7 +187,6 @@ check_server_response(SoupMessage *msg, gpointer state)
 	}
  out:
 	g_clear_error (&err);
-	g_strfreev (parts);
 }
 
 static void
