@@ -82,7 +82,6 @@ soup_auth_negotiate_free_connection_state (SoupConnectionAuth *auth,
 	g_free (conn->response_header);
 }
 
-
 static gboolean
 soup_auth_negotiate_update_connection (SoupConnectionAuth *auth, SoupMessage *msg,
 				       const char *header, gpointer state)
@@ -160,7 +159,6 @@ soup_auth_negotiate_is_ready (SoupAuth *auth,
 	return check_auth_trusted_uri (negotiate, msg);
 }
 
-
 static void
 check_server_response(SoupMessage *msg, gpointer state)
 {
@@ -199,7 +197,6 @@ check_server_response(SoupMessage *msg, gpointer state)
 	g_strfreev (parts);
 }
 
-
 static void
 remove_server_response_handler(SoupMessage *msg, gpointer state)
 {
@@ -222,7 +219,6 @@ soup_auth_negotiate_get_connection_authorization (SoupConnectionAuth *auth,
 		conn->response_header = NULL;
 		conn->state = SOUP_NEGOTIATE_SENT_RESPONSE;
 	}
-
 
 	g_signal_connect (msg,
 			  "finished",
@@ -278,7 +274,7 @@ static void
 soup_auth_negotiate_class_init (SoupAuthNegotiateClass *auth_negotiate_class)
 {
 	SoupAuthClass *auth_class = SOUP_AUTH_CLASS (auth_negotiate_class);
-	SoupConnectionAuthClass *connauth_class =
+	SoupConnectionAuthClass *conn_auth_class =
 			SOUP_CONNECTION_AUTH_CLASS (auth_negotiate_class);
 	GObjectClass *object_class = G_OBJECT_CLASS (auth_negotiate_class);
 
@@ -292,11 +288,11 @@ soup_auth_negotiate_class_init (SoupAuthNegotiateClass *auth_negotiate_class)
 	auth_class->is_authenticated = soup_auth_negotiate_is_authenticated;
 	auth_class->is_ready = soup_auth_negotiate_is_ready;
 
-	connauth_class->create_connection_state = soup_auth_negotiate_create_connection_state;
-	connauth_class->free_connection_state = soup_auth_negotiate_free_connection_state;
-	connauth_class->update_connection = soup_auth_negotiate_update_connection;
-	connauth_class->get_connection_authorization = soup_auth_negotiate_get_connection_authorization;
-	connauth_class->is_connection_ready = soup_auth_negotiate_is_connection_ready;
+	conn_auth_class->create_connection_state = soup_auth_negotiate_create_connection_state;
+	conn_auth_class->free_connection_state = soup_auth_negotiate_free_connection_state;
+	conn_auth_class->update_connection = soup_auth_negotiate_update_connection;
+	conn_auth_class->get_connection_authorization = soup_auth_negotiate_get_connection_authorization;
+	conn_auth_class->is_connection_ready = soup_auth_negotiate_is_connection_ready;
 
 	object_class->finalize = soup_auth_negotiate_finalize;
 
@@ -338,7 +334,6 @@ parse_trusted_uris(void)
 		uris = g_strsplit (env, ",", -1);
 	return uris;
 }
-
 
 /* check if scheme://host:port from msg matches the trusted uri */
 static gboolean
@@ -390,16 +385,15 @@ match_base_uri (SoupMessage *msg, const gchar *trusted)
 	trusted_host = trusted_host_port[0];
 	host = soup_uri_get_host (uri);
 	if (g_str_has_suffix (host, trusted_host)) {
-	    /* if the msg host ends with host from the trusted uri, then make
-	     * sure it is either an exact match, or prefixed with a dot. We
-	     * don't want "foobar.com" to match "bar.com"
-	     */
+		/* if the msg host ends with host from the trusted uri, then make
+		 * sure it is either an exact match, or prefixed with a dot. We
+		 * don't want "foobar.com" to match "bar.com"
+		 */
 		if (g_ascii_strcasecmp (host, trusted_host) == 0) {
 			ret = TRUE;
 			goto out;
 		} else {
-			/* we don't want example.com to match fooexample.com
-                         */
+			/* we don't want example.com to match fooexample.com */
 			trusted_host_len = strlen (trusted_host);
 			host_len = strlen (host);
 			if (host[host_len - trusted_host_len - 1] == '.') {
@@ -412,7 +406,6 @@ out:
 	g_strfreev (trusted_host_port);
 	return ret;
 }
-
 
 static gboolean
 check_auth_trusted_uri (SoupAuthNegotiate *negotiate, SoupMessage *msg)
@@ -429,7 +422,7 @@ check_auth_trusted_uri (SoupAuthNegotiate *negotiate, SoupMessage *msg)
 		return FALSE;
 	}
 
-	for (i=0; i < g_strv_length (trusted_uris); i++) {
+	for (i = 0; i < g_strv_length (trusted_uris); i++) {
 		if (match_base_uri (msg, trusted_uris[i]))
 			return TRUE;
 	}

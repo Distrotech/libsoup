@@ -43,7 +43,7 @@ soup_gss_error (OM_uint32 err_maj, OM_uint32 err_min, GError **err)
 		if (GSS_ERROR (maj_stat))
 			break;
 
-		buf_maj = g_strdup ((char*) status.value);
+		buf_maj = g_strdup ((char *) status.value);
 		gss_release_buffer (&min_stat, &status);
 
 		maj_stat = gss_display_status (&min_stat,
@@ -53,7 +53,7 @@ soup_gss_error (OM_uint32 err_maj, OM_uint32 err_min, GError **err)
 					       &msg_ctx,
 					       &status);
 		if (!GSS_ERROR (maj_stat)) {
-			buf_min = g_strdup ((char*) status.value);
+			buf_min = g_strdup ((char *) status.value);
 			gss_release_buffer (&min_stat, &status);
 		}
 
@@ -86,7 +86,7 @@ soup_gss_client_init (SoupNegotiateConnectionState *conn, const char *host, GErr
 	h = g_ascii_strdown (host, -1);
 	service = g_strconcat ("HTTP/", h, NULL);
 	token.length = strlen (service);
-	token.value = (char *)service;
+	token.value = (char *) service;
 
 	maj_stat = gss_import_name (&min_stat,
 				    &token,
@@ -144,7 +144,7 @@ soup_gss_client_step (SoupNegotiateConnectionState *conn, const char *challenge,
 
 	ret = (maj_stat == GSS_S_COMPLETE) ? AUTH_GSS_COMPLETE : AUTH_GSS_CONTINUE;
 	if (out.length) {
-		char *response = g_base64_encode ((const unsigned char *)out.value, out.length);
+		char *response = g_base64_encode ((const unsigned char *) out.value, out.length);
 		conn->response_header = g_strconcat ("Negotiate ", response, NULL);
 		g_free (response);
 		maj_stat = gss_release_buffer (&min_stat, &out);
@@ -166,4 +166,3 @@ soup_gss_client_cleanup (SoupNegotiateConnectionState *conn)
 
 	gss_release_name (&min_stat, &conn->server_name);
 }
-
