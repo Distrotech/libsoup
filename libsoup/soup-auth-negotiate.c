@@ -25,7 +25,7 @@
 
 static gboolean soup_gss_build_response (SoupNegotiateConnectionState *conn,
 					 SoupAuth *auth, GError **err);
-static gchar** parse_trusted_uris (void);
+static void parse_trusted_uris (void);
 static gboolean check_auth_trusted_uri (SoupAuthNegotiate *negotiate,
 					SoupMessage *msg);
 
@@ -48,7 +48,7 @@ struct {
 } soup_gssapi_syms;
 gboolean have_gssapi;
 
-static gchar **trusted_uris;
+static GSList *trusted_uris;
 
 static void
 soup_auth_negotiate_init (SoupAuthNegotiate *negotiate)
@@ -288,7 +288,7 @@ soup_auth_negotiate_class_init (SoupAuthNegotiateClass *auth_negotiate_class)
 
 	object_class->finalize = soup_auth_negotiate_finalize;
 
-	trusted_uris = parse_trusted_uris ();
+	parse_trusted_uris ();
 	have_gssapi = soup_gssapi_load();
 }
 
@@ -315,88 +315,73 @@ soup_gss_build_response (SoupNegotiateConnectionState *conn, SoupAuth *auth, GEr
 }
 
 /* Parses a comma separated list of URIS from the environment. */
-static gchar**
-parse_trusted_uris(void)
+static void
+parse_trusted_uris (void)
 {
 	gchar **uris = NULL;
 	const gchar *env;
+	gint i;
 
-	env = g_getenv ("SOUP_AUTH_TRUSTED_URIS");
-	if (env)
-		uris = g_strsplit (env, ",", -1);
-	return uris;
+	/* Initialize the list */
+	trusted_uris = NULL;
+
+	if (!(env = g_getenv ("SOUP_AUTH_TRUSTED_URIS")))
+		return;
+
+	if (!(uris = g_strsplit (env, ",", -1)))
+		return;
+
+	for (i = 0; i < g_strv_length (uris); i++) {
+		SoupURI *uri;
+
+		/* Is the supplied URI is valid append it to the list */
+		if ((uri = soup_uri_new (uris[i])))
+			trusted_uris = g_slist_append (trusted_uris, uri);
+	}
+
+	g_strfreev (uris);
 }
 
 /* check if scheme://host:port from msg matches the trusted uri */
-static gboolean
-match_base_uri (SoupMessage *msg, const gchar *trusted)
+static gint
+match_base_uri (SoupURI *trusted_uri, SoupURI *msg_uri)
 {
-	SoupURI *uri;
-	gboolean ret = FALSE;
+	if (msg_uri->scheme != trusted_uri->scheme)
+		return 1;
 
-	/* params of the trusted uri */
-	gchar **trusted_parts = NULL;
-	gchar **trusted_host_port = NULL;
-	const gchar *trusted_host = NULL;
-	gint trusted_host_len;
+	if (trusted_uri->port && (msg_uri->port != trusted_uri->port))
+		return 1;
 
-	/* params of the msg's uri */
-	const gchar  *host = NULL;
-	gint port;
-	gint host_len;
+	if (trusted_uri->host) {
+		const gchar *msg_host = NULL;
+		const gchar *trusted_host = NULL;
 
-	uri = soup_message_get_uri (msg);
-	/* split trusted uri into scheme and host/port */
-	if (strstr (trusted, "://")) {
-		trusted_parts = g_strsplit (trusted, "://", -1);
+		msg_host = soup_uri_get_host (msg_uri);
+		trusted_host = soup_uri_get_host (trusted_uri);
 
-		/* The scheme has to match exactly */
-		if (g_ascii_strcasecmp (trusted_parts[0],
-                                  soup_uri_get_scheme (uri))) {
-			goto out;
-		}
-		if (strlen (trusted_parts[1]) == 0) {
-			/* scheme only, we're done */
-			ret = TRUE;
-			goto out;
-		} else
-			trusted_host = trusted_parts[1];
-	} else {
-		trusted_host = trusted;
-	}
+		if (g_str_has_suffix (msg_host, trusted_host)) {
+			/* if the msg host ends with host from the trusted uri, then make
+			 * sure it is either an exact match, or prefixed with a dot. We
+			 * don't want "foobar.com" to match "bar.com"
+			 */
+			if (g_ascii_strcasecmp (msg_host, trusted_host) == 0) {
+				return 0;
+			} else {
+				gint trusted_host_len, msg_host_len;
 
-	trusted_host_port = g_strsplit (trusted_host, ":", 2);
-	/* If we got a port in the trusted uri it has to match exactly */
-	if (g_strv_length (trusted_host_port) > 1) {
-		port = g_ascii_strtoll (trusted_host_port[1], NULL, 10);
-		if (port != soup_uri_get_port (uri)) {
-			goto out;
-		}
-	}
-
-	trusted_host = trusted_host_port[0];
-	host = soup_uri_get_host (uri);
-	if (g_str_has_suffix (host, trusted_host)) {
-		/* if the msg host ends with host from the trusted uri, then make
-		 * sure it is either an exact match, or prefixed with a dot. We
-		 * don't want "foobar.com" to match "bar.com"
-		 */
-		if (g_ascii_strcasecmp (host, trusted_host) == 0) {
-			ret = TRUE;
-			goto out;
-		} else {
-			/* we don't want example.com to match fooexample.com */
-			trusted_host_len = strlen (trusted_host);
-			host_len = strlen (host);
-			if (host[host_len - trusted_host_len - 1] == '.') {
-				ret = TRUE;
+				/* we don't want example.com to match fooexample.com */
+				trusted_host_len = strlen (trusted_host);
+				msg_host_len = strlen (msg_host);
+				if (msg_host[msg_host_len - trusted_host_len - 1] == '.') {
+					return 0;
+				}
 			}
 		}
+
+		return 1;
 	}
-out:
-	g_strfreev (trusted_parts);
-	g_strfreev (trusted_host_port);
-	return ret;
+
+	return 0;
 }
 
 static gboolean
@@ -404,20 +389,22 @@ check_auth_trusted_uri (SoupAuthNegotiate *negotiate, SoupMessage *msg)
 {
 	SoupAuthNegotiatePrivate *priv =
 		SOUP_AUTH_NEGOTIATE_GET_PRIVATE (negotiate);
-	int i;
+	SoupURI *msg_uri;
+	GSList *matched = NULL;
 
 	g_return_val_if_fail (negotiate != NULL, FALSE);
 	g_return_val_if_fail (priv != NULL, FALSE);
 	g_return_val_if_fail (msg != NULL, FALSE);
 
-	/* If no trusted uris are set, we allow all https uris */
-	if (!trusted_uris) {
-		return match_base_uri (msg, "https://");
-	}
+	msg_uri = soup_message_get_uri (msg);
 
-	for (i = 0; i < g_strv_length (trusted_uris); i++) {
-		if (match_base_uri (msg, trusted_uris[i]))
-			return TRUE;
-	}
-	return FALSE;
+	/* If no trusted uris are set, we allow all https uris */
+	if (!trusted_uris)
+                return g_ascii_strncasecmp (msg_uri->scheme, "https", 5) == 0;
+
+	matched = g_slist_find_custom (trusted_uris,
+				       msg_uri,
+				       (GCompareFunc) match_base_uri);
+
+	return matched ? TRUE : FALSE;
 }
