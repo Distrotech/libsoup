@@ -418,8 +418,9 @@ check_auth_trusted_uri (SoupAuthNegotiate *negotiate, SoupMessage *msg)
 	g_return_val_if_fail (priv != NULL, FALSE);
 	g_return_val_if_fail (msg != NULL, FALSE);
 
+	/* If no trusted uris are set, we allow all https uris */
 	if (!trusted_uris) {
-		return FALSE;
+		return match_base_uri (msg, "https://");
 	}
 
 	for (i = 0; i < g_strv_length (trusted_uris); i++) {
