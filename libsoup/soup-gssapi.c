@@ -26,6 +26,9 @@ soup_gss_client_step (SoupNegotiateConnectionState *conn, const char *host, GErr
 void
 soup_gss_client_cleanup (SoupNegotiateConnectionState *conn);
 
+static const char spnego_OID[] = "\x2b\x06\x01\x05\x05\x02";
+static const gss_OID_desc gss_mech_spnego = { 6, (void *)&spnego_OID };
+
 static void
 soup_gss_error (OM_uint32 err_maj, OM_uint32 err_min, GError **err)
 {
@@ -37,7 +40,7 @@ soup_gss_error (OM_uint32 err_maj, OM_uint32 err_min, GError **err)
 		maj_stat = gss_display_status (&min_stat,
 					       err_maj,
 					       GSS_C_GSS_CODE,
-					       GSS_C_NO_OID,
+					       (gss_OID) &gss_mech_spnego,
 					       &msg_ctx,
 					       &status);
 		if (GSS_ERROR (maj_stat))
@@ -126,7 +129,7 @@ soup_gss_client_step (SoupNegotiateConnectionState *conn, const char *challenge,
 					 GSS_C_NO_CREDENTIAL,
 					 &conn->context,
 					 conn->server_name,
-					 GSS_C_NO_OID,
+					 (gss_OID) &gss_mech_spnego,
 					 GSS_C_MUTUAL_FLAG,
 					 GSS_C_INDEFINITE,
 					 GSS_C_NO_CHANNEL_BINDINGS,
