@@ -87,13 +87,13 @@ soup_gss_client_init (SoupNegotiateConnectionState *conn, const char *host, GErr
 	conn->context = GSS_C_NO_CONTEXT;
 
 	h = g_ascii_strdown (host, -1);
-	service = g_strconcat ("HTTP/", h, NULL);
+	service = g_strconcat ("HTTP@", h, NULL);
 	token.length = strlen (service);
 	token.value = (char *) service;
 
 	maj_stat = gss_import_name (&min_stat,
 				    &token,
-				    (gss_OID) GSS_KRB5_NT_PRINCIPAL_NAME,
+				    (gss_OID) GSS_C_NT_HOSTBASED_SERVICE,
 				    &conn->server_name);
 
 	if (GSS_ERROR (maj_stat)) {
