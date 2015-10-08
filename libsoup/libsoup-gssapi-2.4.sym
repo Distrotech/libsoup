@@ -1,3 +1,5 @@
-soup_gss_client_init
-soup_gss_client_step
 soup_gss_client_cleanup
+soup_gss_client_get_name
+soup_gss_client_init
+soup_gss_client_inquire_cred
+soup_gss_client_step

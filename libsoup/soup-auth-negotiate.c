@@ -14,6 +14,7 @@
 #endif
 
 #include <string.h>
+#include <stdio.h>
 
 #include "soup-auth-negotiate.h"
 #include "soup-gssapi.h"
@@ -29,22 +30,21 @@ static void parse_trusted_uris (void);
 static gboolean check_auth_trusted_uri (SoupAuthNegotiate *negotiate,
 					SoupMessage *msg);
 
-typedef struct {
-	char *username;
-} SoupAuthNegotiatePrivate;
-#define SOUP_AUTH_NEGOTIATE_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), SOUP_TYPE_AUTH_NEGOTIATE, SoupAuthNegotiatePrivate))
-
 G_DEFINE_TYPE (SoupAuthNegotiate, soup_auth_negotiate, SOUP_TYPE_CONNECTION_AUTH)
 
 /* Function pointers to dlopen'ed libsoup-gssapi */
 struct {
+	void (*client_cleanup)(SoupNegotiateConnectionState *conn);
+	char * (*client_get_name)(SoupAuth *auth,
+				  GError **err);
 	int (*client_init)(SoupNegotiateConnectionState *conn,
 			   const char *host,
 			   GError **err);
+	int (*client_inquire_cred)(SoupAuth *auth,
+			           GError **err);
 	int (*client_step)(SoupNegotiateConnectionState *conn,
 			   const char *challenge,
 			   GError **err);
-	void (*client_cleanup)(SoupNegotiateConnectionState *conn);
 } soup_gssapi_syms;
 gboolean have_gssapi;
 
@@ -53,16 +53,6 @@ static GSList *trusted_uris;
 static void
 soup_auth_negotiate_init (SoupAuthNegotiate *negotiate)
 {
-}
-
-static void
-soup_auth_negotiate_finalize (GObject *object)
-{
-	SoupAuthNegotiatePrivate *priv = SOUP_AUTH_NEGOTIATE_GET_PRIVATE (object);
-
-	g_free (priv->username);
-
-	G_OBJECT_CLASS (soup_auth_negotiate_parent_class)->finalize (object);
 }
 
 static gpointer
@@ -86,10 +76,14 @@ static gboolean
 soup_auth_negotiate_update_connection (SoupConnectionAuth *auth, SoupMessage *msg,
 				       const char *header, gpointer state)
 {
-	SoupAuthNegotiatePrivate *priv =
-		SOUP_AUTH_NEGOTIATE_GET_PRIVATE (auth);
 	SoupNegotiateConnectionState *conn = state;
 	GError *err = NULL;
+
+	if (!check_auth_trusted_uri (SOUP_AUTH_NEGOTIATE (auth), msg)) {
+		conn->state = SOUP_NEGOTIATE_FAILED;
+
+		return FALSE;
+	}
 
 	if (conn->state > SOUP_NEGOTIATE_RECEIVED_CHALLENGE) {
 		/* We already authenticated, but then got another 401.
@@ -97,10 +91,6 @@ soup_auth_negotiate_update_connection (SoupConnectionAuth *auth, SoupMessage *ms
 		 * authenticate again.
 		 */
 		conn->state = SOUP_NEGOTIATE_FAILED;
-
-		/* Make sure we don't claim to be authenticated */
-		g_free (priv->username);
-		priv->username = NULL;
 
 		return FALSE;
 	}
@@ -127,6 +117,7 @@ soup_auth_negotiate_get_protection_space (SoupAuth *auth, SoupURI *source_uri)
 
 	space = g_strdup (source_uri->path);
 
+	/* FIXME does https://bugzilla.gnome.org/show_bug.cgi?id=755617 apply here as well? */
 	/* Strip filename component */
 	p = strrchr (space, '/');
 	if (p && p != space && p[1])
@@ -139,28 +130,28 @@ static void
 soup_auth_negotiate_authenticate (SoupAuth *auth, const char *username,
 				  const char *password)
 {
-	SoupAuthNegotiatePrivate *priv = SOUP_AUTH_NEGOTIATE_GET_PRIVATE (auth);
-
-	g_return_if_fail (username != NULL);
-	priv->username = g_strdup (username);
+	/* FIXME mark auth as not authenticated */
 }
 
 static gboolean
 soup_auth_negotiate_is_authenticated (SoupAuth *auth)
 {
-	return SOUP_AUTH_NEGOTIATE_GET_PRIVATE (auth)->username != NULL;
-}
+	gboolean has_credentials = FALSE;
+	GError *err = NULL;
 
-static gboolean
-soup_auth_negotiate_is_ready (SoupAuth *auth,
-			      SoupMessage *msg)
-{
-	SoupAuthNegotiate* negotiate = SOUP_AUTH_NEGOTIATE (auth);
-	return check_auth_trusted_uri (negotiate, msg);
+	if (have_gssapi)
+		has_credentials = soup_gssapi_syms.client_inquire_cred (auth, &err);
+
+	if (err)
+		g_warning ("%s", err->message);
+
+	g_clear_error (&err);
+
+	return has_credentials;
 }
 
 static void
-check_server_response(SoupMessage *msg, gpointer state)
+check_server_response (SoupMessage *msg, gpointer state)
 {
 	gint ret;
 	const char *auth_headers;
@@ -196,7 +187,6 @@ remove_server_response_handler(SoupMessage *msg, gpointer state)
 					      G_CALLBACK (check_server_response),
 					      state);
 }
-
 
 static char *
 soup_auth_negotiate_get_connection_authorization (SoupConnectionAuth *auth,
@@ -255,9 +245,11 @@ soup_gssapi_load (void)
 #define GSSAPI_BIND_SYMBOL(name) \
 	g_return_val_if_fail (g_module_symbol (gssapi, "soup_gss_" #name, (gpointer)&soup_gssapi_syms.name), FALSE)
 
-	GSSAPI_BIND_SYMBOL(client_step);
-	GSSAPI_BIND_SYMBOL(client_init);
 	GSSAPI_BIND_SYMBOL(client_cleanup);
+	GSSAPI_BIND_SYMBOL(client_get_name);
+	GSSAPI_BIND_SYMBOL(client_init);
+	GSSAPI_BIND_SYMBOL(client_inquire_cred);
+	GSSAPI_BIND_SYMBOL(client_step);
 #undef GSSPI_BIND_SYMBOL
 	return TRUE;
 }
@@ -268,9 +260,6 @@ soup_auth_negotiate_class_init (SoupAuthNegotiateClass *auth_negotiate_class)
 	SoupAuthClass *auth_class = SOUP_AUTH_CLASS (auth_negotiate_class);
 	SoupConnectionAuthClass *conn_auth_class =
 			SOUP_CONNECTION_AUTH_CLASS (auth_negotiate_class);
-	GObjectClass *object_class = G_OBJECT_CLASS (auth_negotiate_class);
-
-	g_type_class_add_private (auth_negotiate_class, sizeof (SoupAuthNegotiatePrivate));
 
 	auth_class->scheme_name = "Negotiate";
 	auth_class->strength = 7;
@@ -278,15 +267,12 @@ soup_auth_negotiate_class_init (SoupAuthNegotiateClass *auth_negotiate_class)
 	auth_class->get_protection_space = soup_auth_negotiate_get_protection_space;
 	auth_class->authenticate = soup_auth_negotiate_authenticate;
 	auth_class->is_authenticated = soup_auth_negotiate_is_authenticated;
-	auth_class->is_ready = soup_auth_negotiate_is_ready;
 
 	conn_auth_class->create_connection_state = soup_auth_negotiate_create_connection_state;
 	conn_auth_class->free_connection_state = soup_auth_negotiate_free_connection_state;
 	conn_auth_class->update_connection = soup_auth_negotiate_update_connection;
 	conn_auth_class->get_connection_authorization = soup_auth_negotiate_get_connection_authorization;
 	conn_auth_class->is_connection_ready = soup_auth_negotiate_is_connection_ready;
-
-	object_class->finalize = soup_auth_negotiate_finalize;
 
 	parse_trusted_uris ();
 	have_gssapi = soup_gssapi_load();
@@ -387,13 +373,10 @@ match_base_uri (SoupURI *trusted_uri, SoupURI *msg_uri)
 static gboolean
 check_auth_trusted_uri (SoupAuthNegotiate *negotiate, SoupMessage *msg)
 {
-	SoupAuthNegotiatePrivate *priv =
-		SOUP_AUTH_NEGOTIATE_GET_PRIVATE (negotiate);
 	SoupURI *msg_uri;
 	GSList *matched = NULL;
 
 	g_return_val_if_fail (negotiate != NULL, FALSE);
-	g_return_val_if_fail (priv != NULL, FALSE);
 	g_return_val_if_fail (msg != NULL, FALSE);
 
 	msg_uri = soup_message_get_uri (msg);

@@ -17,17 +17,23 @@
 #include <gssapi/gssapi.h>
 #include <gssapi/gssapi_krb5.h>
 
+void
+soup_gss_client_cleanup (SoupNegotiateConnectionState *conn);
+
 int
 soup_gss_client_init (SoupNegotiateConnectionState *conn, const char *host, GError **err);
 
 int
+soup_gss_client_inquire_cred (SoupAuth *auth, GError **err);
+
+char *
+soup_gss_client_get_name (SoupAuth *auth, GError **err);
+
+int
 soup_gss_client_step (SoupNegotiateConnectionState *conn, const char *host, GError **err);
 
-void
-soup_gss_client_cleanup (SoupNegotiateConnectionState *conn);
-
 static const char spnego_OID[] = "\x2b\x06\x01\x05\x05\x02";
-static const gss_OID_desc gss_mech_spnego = { 6, (void *)&spnego_OID };
+static const gss_OID_desc gss_mech_spnego = { 6, (void *) &spnego_OID };
 
 static void
 soup_gss_error (OM_uint32 err_maj, OM_uint32 err_min, GError **err)
@@ -72,6 +78,70 @@ soup_gss_error (OM_uint32 err_maj, OM_uint32 err_min, GError **err)
 		g_free (buf_min);
 		buf_min = buf_maj = NULL;
 	} while (!GSS_ERROR (maj_stat) && msg_ctx != 0);
+}
+
+G_MODULE_EXPORT int
+soup_gss_client_inquire_cred (SoupAuth *auth, GError **err)
+{
+	gboolean ret = FALSE;
+	OM_uint32 maj_stat, min_stat;
+
+	maj_stat = gss_inquire_cred (&min_stat,
+				     GSS_C_NO_CREDENTIAL,
+				     NULL,
+				     NULL,
+				     NULL,
+				     NULL);
+
+	if (GSS_ERROR (maj_stat))
+		soup_gss_error (maj_stat, min_stat, err);
+
+	ret = maj_stat == GSS_S_COMPLETE;
+
+	return ret;
+}
+
+G_MODULE_EXPORT char *
+soup_gss_client_get_name (SoupAuth *auth, GError **err)
+{
+	gchar *name = NULL;
+	OM_uint32 maj_stat, min_stat;
+	gss_name_t gss_name;
+	gss_buffer_desc out = GSS_C_EMPTY_BUFFER;
+
+	maj_stat = gss_inquire_cred (&min_stat,
+				     GSS_C_NO_CREDENTIAL,
+				     &gss_name,
+				     NULL,
+				     NULL,
+				     NULL);
+
+	if (GSS_ERROR (maj_stat)) {
+		soup_gss_error (maj_stat, min_stat, err);
+		goto out;
+	}
+
+	if (maj_stat != GSS_S_COMPLETE)
+		goto out;
+
+	maj_stat = gss_display_name (&min_stat,
+				     gss_name,
+				     &out,
+				     NULL);
+
+	if (GSS_ERROR (maj_stat)) {
+		soup_gss_error (maj_stat, min_stat, err);
+		goto out;
+	}
+
+	if (maj_stat == GSS_S_COMPLETE)
+		name = g_strndup (out.value, out.length);
+
+	maj_stat = gss_release_buffer (&min_stat, &out);
+ out:
+	maj_stat = gss_release_name (&min_stat, &gss_name);
+
+	return name;
 }
 
 G_MODULE_EXPORT int
@@ -160,7 +230,6 @@ out:
 		g_free (in.value);
 	return ret;
 }
-
 
 G_MODULE_EXPORT void
 soup_gss_client_cleanup (SoupNegotiateConnectionState *conn)
