@@ -6,6 +6,8 @@
 #ifndef SOUP_AUTH_NEGOTIATE_H
 #define SOUP_AUTH_NEGOTIATE_H 1
 
+#if HAVE_GSSAPI
+
 #include "soup-connection-auth.h"
 
 #define SOUP_AUTH_NEGOTIATE(object)         (G_TYPE_CHECK_INSTANCE_CAST ((object), SOUP_TYPE_AUTH_NEGOTIATE, SoupAuthNegotiate))
@@ -23,5 +25,7 @@ typedef struct {
 	SoupConnectionAuthClass parent_class;
 
 } SoupAuthNegotiateClass;
+
+#endif /* HAVE_GSSAPI */
 
 #endif /* SOUP_AUTH_NEGOTIATE_H */

@@ -330,7 +330,6 @@ if test "x$KRB5_CONFIG" != "xnone"; then
         AC_DEFINE(HAVE_GSSAPI, 1, [Whether or not gssapi libs are available])
     fi
 fi
-AM_CONDITIONAL(BUILD_LIBSOUP_GSSAPI, test $KRB5_CONFIG != none)
 
 dnl ****************************************************
 dnl *** Warnings to show if using GCC                ***

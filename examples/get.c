@@ -4,6 +4,10 @@
  * Copyright (C) 2013 Igalia, S.L.
  */
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -89,7 +93,10 @@ get_url (const char *url)
 }
 
 static const char *ca_file, *proxy;
-static gboolean synchronous, ntlm, negotiate;
+static gboolean synchronous, ntlm;
+#if HAVE_GSSAPI
+static gboolean negotiate;
+#endif
 
 static GOptionEntry entries[] = {
 	{ "ca-file", 'c', 0,
@@ -104,9 +111,11 @@ static GOptionEntry entries[] = {
 	{ "ntlm", 'n', 0,
 	  G_OPTION_ARG_NONE, &ntlm,
 	  "Use NTLM authentication", NULL },
+#if HAVE_GSSAPI
 	{ "negotiate", 'N', 0,
 	  G_OPTION_ARG_NONE, &negotiate,
 	  "Use Negotiate authentication", NULL },
+#endif
 	{ "output", 'o', 0,
 	  G_OPTION_ARG_STRING, &output_file_path,
 	  "Write the received data to FILE instead of stdout", "FILE" },
@@ -186,10 +195,12 @@ main (int argc, char **argv)
 		soup_uri_free (proxy_uri);
 	}
 
+#if HAVE_GSSAPI
 	if (negotiate) {
 		soup_session_add_feature_by_type(session,
 						 SOUP_TYPE_AUTH_NEGOTIATE);
 	}
+#endif
 
 	if (!synchronous)
 		loop = g_main_loop_new (NULL, TRUE);

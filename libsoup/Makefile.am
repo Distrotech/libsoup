@@ -99,7 +99,8 @@ libsoup_2_4_la_LIBADD =			\
 	$(GLIB_LIBS)			\
 	$(LIBWS2_32)			\
 	$(XML_LIBS)			\
-	$(SQLITE_LIBS)
+	$(SQLITE_LIBS)			\
+	$(KRB5_LIBS)
 
 libsoup_2_4_la_SOURCES =		\
 	gconstructor.h			\
@@ -242,26 +243,6 @@ libsoup_gnome_2_4_la_SOURCES =		\
 	soup-proxy-resolver-gnome.c	\
 	soup-password-manager-gnome.h	\
 	soup-password-manager-gnome.c
-
-endif
-
-if BUILD_LIBSOUP_GSSAPI
-
-lib_LTLIBRARIES += libsoup-gssapi-2.4.la
-
-libsoup_gssapi_2_4_la_LDFLAGS =	\
-	-version-info $(SOUP_CURRENT):$(SOUP_REVISION):$(SOUP_AGE) \
-	-no-undefined \
-	-export-symbols $(srcdir)/libsoup-gssapi-2.4.sym
-
-EXTRA_DIST += libsoup-gssapi-2.4.sym
-
-libsoup_gssapi_2_4_la_LIBADD =		\
-	$(KRB5_LIBS)			\
-	$(GLIB_LIBS)
-
-libsoup_gssapi_2_4_la_SOURCES =		\
-	soup-gssapi.c
 
 endif
 

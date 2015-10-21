@@ -9,46 +9,59 @@
 #include <config.h>
 #endif
 
-#ifdef HAVE_GSSAPI
-# include <gssapi/gssapi.h>
-#endif
+#if HAVE_GSSAPI
 
 #include <string.h>
-#include <stdio.h>
+
+#include <gssapi/gssapi.h>
+#include <gssapi/gssapi_krb5.h>
 
 #include "soup-auth-negotiate.h"
-#include "soup-gssapi.h"
 #include "soup-headers.h"
 #include "soup-message.h"
 #include "soup-message-private.h"
 #include "soup-misc.h"
 #include "soup-uri.h"
 
+#define AUTH_GSS_ERROR      -1
+#define AUTH_GSS_COMPLETE    1
+#define AUTH_GSS_CONTINUE    0
+
+typedef enum {
+	SOUP_NEGOTIATE_NEW,
+	SOUP_NEGOTIATE_RECEIVED_CHALLENGE, /* received intial negotiate header */
+	SOUP_NEGOTIATE_SENT_RESPONSE,      /* sent response to server */
+	SOUP_NEGOTIATE_FAILED
+} SoupNegotiateState;
+
+typedef struct {
+	SoupNegotiateState state;
+
+	gss_ctx_id_t context;
+	gss_name_t   server_name;
+
+	gchar *response_header;
+} SoupNegotiateConnectionState;
+
 static gboolean soup_gss_build_response (SoupNegotiateConnectionState *conn,
 					 SoupAuth *auth, GError **err);
 static void parse_trusted_uris (void);
 static gboolean check_auth_trusted_uri (SoupAuthNegotiate *negotiate,
 					SoupMessage *msg);
+static void soup_gss_client_cleanup (SoupNegotiateConnectionState *conn);
+static gboolean soup_gss_client_init (SoupNegotiateConnectionState *conn,
+				      const char *host, GError **err);
+static gboolean soup_gss_client_inquire_cred (SoupAuth *auth, GError **err);
+static gchar * soup_gss_client_get_name (SoupAuth *auth, GError **err);
+static int soup_gss_client_step (SoupNegotiateConnectionState *conn,
+				 const char *host, GError **err);
 
-G_DEFINE_TYPE (SoupAuthNegotiate, soup_auth_negotiate, SOUP_TYPE_CONNECTION_AUTH)
-
-/* Function pointers to dlopen'ed libsoup-gssapi */
-struct {
-	void (*client_cleanup)(SoupNegotiateConnectionState *conn);
-	char * (*client_get_name)(SoupAuth *auth,
-				  GError **err);
-	int (*client_init)(SoupNegotiateConnectionState *conn,
-			   const char *host,
-			   GError **err);
-	int (*client_inquire_cred)(SoupAuth *auth,
-			           GError **err);
-	int (*client_step)(SoupNegotiateConnectionState *conn,
-			   const char *challenge,
-			   GError **err);
-} soup_gssapi_syms;
-gboolean have_gssapi;
+static const char spnego_OID[] = "\x2b\x06\x01\x05\x05\x02";
+static const gss_OID_desc gss_mech_spnego = { 6, (void *) &spnego_OID };
 
 static GSList *trusted_uris;
+
+G_DEFINE_TYPE (SoupAuthNegotiate, soup_auth_negotiate, SOUP_TYPE_CONNECTION_AUTH)
 
 static void
 soup_auth_negotiate_init (SoupAuthNegotiate *negotiate)
@@ -67,8 +80,8 @@ soup_auth_negotiate_free_connection_state (SoupConnectionAuth *auth,
 {
 	SoupNegotiateConnectionState *conn = state;
 
-	if (have_gssapi)
-		soup_gssapi_syms.client_cleanup (conn);
+	soup_gss_client_cleanup (conn);
+
 	g_free (conn->response_header);
 }
 
@@ -139,8 +152,7 @@ soup_auth_negotiate_is_authenticated (SoupAuth *auth)
 	gboolean has_credentials = FALSE;
 	GError *err = NULL;
 
-	if (have_gssapi)
-		has_credentials = soup_gssapi_syms.client_inquire_cred (auth, &err);
+	has_credentials = soup_gss_client_inquire_cred (auth, &err);
 
 	if (err)
 		g_warning ("%s", err->message);
@@ -170,7 +182,7 @@ check_server_response (SoupMessage *msg, gpointer state)
 		goto out;
 	}
 
-	ret = soup_gssapi_syms.client_step (conn, auth_headers + 10, &err);
+	ret = soup_gss_client_step (conn, auth_headers + 10, &err);
 
 	if (ret != AUTH_GSS_COMPLETE) {
 		g_warning ("%s", err->message);
@@ -226,34 +238,6 @@ soup_auth_negotiate_is_connection_ready (SoupConnectionAuth *auth,
 	return conn->state != SOUP_NEGOTIATE_FAILED;
 }
 
-static gboolean
-soup_gssapi_load (void)
-{
-	GModule *gssapi;
-	const char *modulename = PACKAGE "-gssapi-2.4." G_MODULE_SUFFIX;
-
-	if (!g_module_supported ())
-		return FALSE;
-
-	gssapi = g_module_open (modulename, G_MODULE_BIND_LOCAL);
-	if (!gssapi) {
-		g_warning ("Failed to load %s - negotiate support will "
-			   "be disabled.", modulename);
-		return FALSE;
-	}
-
-#define GSSAPI_BIND_SYMBOL(name) \
-	g_return_val_if_fail (g_module_symbol (gssapi, "soup_gss_" #name, (gpointer)&soup_gssapi_syms.name), FALSE)
-
-	GSSAPI_BIND_SYMBOL(client_cleanup);
-	GSSAPI_BIND_SYMBOL(client_get_name);
-	GSSAPI_BIND_SYMBOL(client_init);
-	GSSAPI_BIND_SYMBOL(client_inquire_cred);
-	GSSAPI_BIND_SYMBOL(client_step);
-#undef GSSPI_BIND_SYMBOL
-	return TRUE;
-}
-
 static void
 soup_auth_negotiate_class_init (SoupAuthNegotiateClass *auth_negotiate_class)
 {
@@ -275,26 +259,15 @@ soup_auth_negotiate_class_init (SoupAuthNegotiateClass *auth_negotiate_class)
 	conn_auth_class->is_connection_ready = soup_auth_negotiate_is_connection_ready;
 
 	parse_trusted_uris ();
-	have_gssapi = soup_gssapi_load();
 }
 
 static gboolean
 soup_gss_build_response (SoupNegotiateConnectionState *conn, SoupAuth *auth, GError **err)
 {
-	if (!have_gssapi) {
-		if (err && *err == NULL) {
-			g_set_error (err,
-				     SOUP_HTTP_ERROR,
-				     SOUP_STATUS_GSSAPI_FAILED,
-				     "GSSAPI unavailable");
-		}
-		return FALSE;
-	}
-
-	if (!soup_gssapi_syms.client_init (conn, soup_auth_get_host (SOUP_AUTH (auth)), err))
+	if (!soup_gss_client_init (conn, soup_auth_get_host (SOUP_AUTH (auth)), err))
 		return FALSE;
 
-	if (soup_gssapi_syms.client_step (conn, "", err) != AUTH_GSS_CONTINUE)
+	if (soup_gss_client_step (conn, "", err) != AUTH_GSS_CONTINUE)
 		return FALSE;
 
 	return TRUE;
@@ -391,3 +364,208 @@ check_auth_trusted_uri (SoupAuthNegotiate *negotiate, SoupMessage *msg)
 
 	return matched ? TRUE : FALSE;
 }
+
+static void
+soup_gss_error (OM_uint32 err_maj, OM_uint32 err_min, GError **err)
+{
+	OM_uint32 maj_stat, min_stat, msg_ctx = 0;
+	gss_buffer_desc status;
+	gchar *buf_maj = NULL, *buf_min = NULL;
+
+	do {
+		maj_stat = gss_display_status (&min_stat,
+					       err_maj,
+					       GSS_C_GSS_CODE,
+					       (gss_OID) &gss_mech_spnego,
+					       &msg_ctx,
+					       &status);
+		if (GSS_ERROR (maj_stat))
+			break;
+
+		buf_maj = g_strdup ((gchar *) status.value);
+		gss_release_buffer (&min_stat, &status);
+
+		maj_stat = gss_display_status (&min_stat,
+					       err_min,
+					       GSS_C_MECH_CODE,
+					       GSS_C_NULL_OID,
+					       &msg_ctx,
+					       &status);
+		if (!GSS_ERROR (maj_stat)) {
+			buf_min = g_strdup ((gchar *) status.value);
+			gss_release_buffer (&min_stat, &status);
+		}
+
+		if (err && *err == NULL) {
+			g_set_error (err,
+				     SOUP_HTTP_ERROR,
+				     SOUP_STATUS_GSSAPI_FAILED,
+				     "%s %s",
+				     buf_maj,
+				     buf_min ? buf_min : "");
+		}
+		g_free (buf_maj);
+		g_free (buf_min);
+		buf_min = buf_maj = NULL;
+	} while (!GSS_ERROR (maj_stat) && msg_ctx != 0);
+}
+
+static gboolean
+soup_gss_client_inquire_cred (SoupAuth *auth, GError **err)
+{
+	gboolean ret = FALSE;
+	OM_uint32 maj_stat, min_stat;
+
+	maj_stat = gss_inquire_cred (&min_stat,
+				     GSS_C_NO_CREDENTIAL,
+				     NULL,
+				     NULL,
+				     NULL,
+				     NULL);
+
+	if (GSS_ERROR (maj_stat))
+		soup_gss_error (maj_stat, min_stat, err);
+
+	ret = maj_stat == GSS_S_COMPLETE;
+
+	return ret;
+}
+
+static gchar *
+soup_gss_client_get_name (SoupAuth *auth, GError **err)
+{
+	gchar *name = NULL;
+	OM_uint32 maj_stat, min_stat;
+	gss_name_t gss_name;
+	gss_buffer_desc out = GSS_C_EMPTY_BUFFER;
+
+	maj_stat = gss_inquire_cred (&min_stat,
+				     GSS_C_NO_CREDENTIAL,
+				     &gss_name,
+				     NULL,
+				     NULL,
+				     NULL);
+
+	if (GSS_ERROR (maj_stat)) {
+		soup_gss_error (maj_stat, min_stat, err);
+		goto out;
+	}
+
+	if (maj_stat != GSS_S_COMPLETE)
+		goto out;
+
+	maj_stat = gss_display_name (&min_stat,
+				     gss_name,
+				     &out,
+				     NULL);
+
+	if (GSS_ERROR (maj_stat)) {
+		soup_gss_error (maj_stat, min_stat, err);
+		goto out;
+	}
+
+	if (maj_stat == GSS_S_COMPLETE)
+		name = g_strndup (out.value, out.length);
+
+	maj_stat = gss_release_buffer (&min_stat, &out);
+ out:
+	maj_stat = gss_release_name (&min_stat, &gss_name);
+
+	return name;
+}
+
+static gboolean
+soup_gss_client_init (SoupNegotiateConnectionState *conn, const gchar *host, GError **err)
+{
+	OM_uint32 maj_stat, min_stat;
+	gchar *service = NULL;
+	gss_buffer_desc token = GSS_C_EMPTY_BUFFER;
+	gboolean ret = FALSE;
+	gchar *h;
+
+	conn->server_name = GSS_C_NO_NAME;
+	conn->context = GSS_C_NO_CONTEXT;
+
+	h = g_ascii_strdown (host, -1);
+	service = g_strconcat ("HTTP@", h, NULL);
+	token.length = strlen (service);
+	token.value = (gchar *) service;
+
+	maj_stat = gss_import_name (&min_stat,
+				    &token,
+				    (gss_OID) GSS_C_NT_HOSTBASED_SERVICE,
+				    &conn->server_name);
+
+	if (GSS_ERROR (maj_stat)) {
+		soup_gss_error (maj_stat, min_stat, err);
+		ret = FALSE;
+		goto out;
+	}
+
+	ret = TRUE;
+out:
+	g_free (h);
+	g_free (service);
+	return ret;
+}
+
+static gint
+soup_gss_client_step (SoupNegotiateConnectionState *conn, const gchar *challenge, GError **err)
+{
+	OM_uint32 maj_stat, min_stat;
+	gss_buffer_desc in = GSS_C_EMPTY_BUFFER;
+	gss_buffer_desc out = GSS_C_EMPTY_BUFFER;
+	gint ret = AUTH_GSS_CONTINUE;
+
+	g_clear_pointer (&conn->response_header, g_free);
+
+	if (challenge && *challenge) {
+		size_t len;
+		in.value = g_base64_decode (challenge, &len);
+		in.length = len;
+	}
+
+	maj_stat = gss_init_sec_context (&min_stat,
+					 GSS_C_NO_CREDENTIAL,
+					 &conn->context,
+					 conn->server_name,
+					 (gss_OID) &gss_mech_spnego,
+					 GSS_C_MUTUAL_FLAG,
+					 GSS_C_INDEFINITE,
+					 GSS_C_NO_CHANNEL_BINDINGS,
+					 &in,
+					 NULL,
+					 &out,
+					 NULL,
+					 NULL);
+
+	if ((maj_stat != GSS_S_COMPLETE) && (maj_stat != GSS_S_CONTINUE_NEEDED)) {
+		soup_gss_error (maj_stat, min_stat, err);
+		ret = AUTH_GSS_ERROR;
+		goto out;
+	}
+
+	ret = (maj_stat == GSS_S_COMPLETE) ? AUTH_GSS_COMPLETE : AUTH_GSS_CONTINUE;
+	if (out.length) {
+		gchar *response = g_base64_encode ((const guchar *) out.value, out.length);
+		conn->response_header = g_strconcat ("Negotiate ", response, NULL);
+		g_free (response);
+		maj_stat = gss_release_buffer (&min_stat, &out);
+	}
+
+out:
+	if (out.value)
+		gss_release_buffer (&min_stat, &out);
+	if (in.value)
+		g_free (in.value);
+	return ret;
+}
+
+G_MODULE_EXPORT void
+soup_gss_client_cleanup (SoupNegotiateConnectionState *conn)
+{
+	OM_uint32 min_stat;
+
+	gss_release_name (&min_stat, &conn->server_name);
+}
+#endif /* HAVE_GSSAPI */
