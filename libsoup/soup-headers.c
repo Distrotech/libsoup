@@ -617,7 +617,7 @@ gboolean
 soup_header_contains (const char *header, const char *token)
 {
 	const char *end;
-	guint len = strlen (token);
+	gsize len = strlen (token);
 
 	g_return_val_if_fail (header != NULL, FALSE);
 	g_return_val_if_fail (token != NULL, FALSE);
@@ -834,7 +834,7 @@ append_param_quoted (GString    *string,
 		     const char *name,
 		     const char *value)
 {
-	int len;
+	gsize len;
 
 	g_string_append (string, name);
 	g_string_append (string, "=\"");

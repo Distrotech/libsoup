@@ -1648,7 +1648,7 @@ soup_socket_get_local_address (SoupSocket *sock)
 		}
 		sa_len = g_socket_address_get_native_size (addr);
 		g_socket_address_to_native (addr, &sa, sa_len, NULL);
-		priv->local_addr = soup_address_new_from_sockaddr ((struct sockaddr *)&sa, sa_len);
+		priv->local_addr = soup_address_new_from_sockaddr ((struct sockaddr *)&sa, (int)sa_len);
 		g_object_unref (addr);
 	}
 unlock:
@@ -1696,7 +1696,7 @@ soup_socket_get_remote_address (SoupSocket *sock)
 		}
 		sa_len = g_socket_address_get_native_size (addr);
 		g_socket_address_to_native (addr, &sa, sa_len, NULL);
-		priv->remote_addr = soup_address_new_from_sockaddr ((struct sockaddr *)&sa, sa_len);
+		priv->remote_addr = soup_address_new_from_sockaddr ((struct sockaddr *)&sa, (int)sa_len);
 		g_object_unref (addr);
 	}
 unlock:

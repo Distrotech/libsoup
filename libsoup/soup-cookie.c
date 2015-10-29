@@ -108,7 +108,7 @@ gboolean
 soup_cookie_domain_matches (SoupCookie *cookie, const char *host)
 {
 	char *match;
-	int dlen;
+	gsize dlen;
 	const char *domain;
 
 	g_return_val_if_fail (cookie != NULL, FALSE);
@@ -1027,7 +1027,7 @@ soup_cookies_to_cookie_header (GSList *cookies)
 gboolean
 soup_cookie_applies_to_uri (SoupCookie *cookie, SoupURI *uri)
 {
-	int plen;
+	gsize plen;
 
 	if (cookie->secure && uri->scheme != SOUP_URI_SCHEME_HTTPS)
 		return FALSE;

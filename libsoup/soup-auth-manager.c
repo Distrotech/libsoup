@@ -315,7 +315,7 @@ static char *
 soup_auth_manager_extract_challenge (const char *challenges, const char *scheme)
 {
 	GSList *items, *i, *next;
-	int schemelen = strlen (scheme);
+	gsize schemelen = strlen (scheme);
 	char *item;
 	GString *challenge;
 

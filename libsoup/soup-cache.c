@@ -566,7 +566,7 @@ lru_compare_func (gconstpointer a, gconstpointer b)
 		return entry_a->freshness_lifetime - entry_b->freshness_lifetime;
 
 	/* Sort by size */
-	return entry_a->length - entry_b->length;
+	return (gint)(entry_a->length - entry_b->length);
 }
 
 static gboolean

@@ -276,7 +276,7 @@ compare_cookies (gconstpointer a, gconstpointer b, gpointer jar)
 	SoupCookie *ca = (SoupCookie *)a;
 	SoupCookie *cb = (SoupCookie *)b;
 	SoupCookieJarPrivate *priv = SOUP_COOKIE_JAR_GET_PRIVATE (jar);
-	int alen, blen;
+	gsize alen, blen;
 	guint aserial, bserial;
 
 	/* "Cookies with longer path fields are listed before cookies
@@ -285,7 +285,7 @@ compare_cookies (gconstpointer a, gconstpointer b, gpointer jar)
 	alen = ca->path ? strlen (ca->path) : 0;
 	blen = cb->path ? strlen (cb->path) : 0;
 	if (alen != blen)
-		return blen - alen;
+		return (int)(blen - alen);
 
 	/* "Among cookies that have equal length path fields, cookies
 	 * with earlier creation dates are listed before cookies with
