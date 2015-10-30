@@ -52,7 +52,6 @@ static void soup_gss_client_cleanup (SoupNegotiateConnectionState *conn);
 static gboolean soup_gss_client_init (SoupNegotiateConnectionState *conn,
 				      const char *host, GError **err);
 static gboolean soup_gss_client_inquire_cred (SoupAuth *auth, GError **err);
-static gchar * soup_gss_client_get_name (SoupAuth *auth, GError **err);
 static int soup_gss_client_step (SoupNegotiateConnectionState *conn,
 				 const char *host, GError **err);
 
@@ -429,49 +428,6 @@ soup_gss_client_inquire_cred (SoupAuth *auth, GError **err)
 	ret = maj_stat == GSS_S_COMPLETE;
 
 	return ret;
-}
-
-static gchar *
-soup_gss_client_get_name (SoupAuth *auth, GError **err)
-{
-	gchar *name = NULL;
-	OM_uint32 maj_stat, min_stat;
-	gss_name_t gss_name;
-	gss_buffer_desc out = GSS_C_EMPTY_BUFFER;
-
-	maj_stat = gss_inquire_cred (&min_stat,
-				     GSS_C_NO_CREDENTIAL,
-				     &gss_name,
-				     NULL,
-				     NULL,
-				     NULL);
-
-	if (GSS_ERROR (maj_stat)) {
-		soup_gss_error (maj_stat, min_stat, err);
-		goto out;
-	}
-
-	if (maj_stat != GSS_S_COMPLETE)
-		goto out;
-
-	maj_stat = gss_display_name (&min_stat,
-				     gss_name,
-				     &out,
-				     NULL);
-
-	if (GSS_ERROR (maj_stat)) {
-		soup_gss_error (maj_stat, min_stat, err);
-		goto out;
-	}
-
-	if (maj_stat == GSS_S_COMPLETE)
-		name = g_strndup (out.value, out.length);
-
-	maj_stat = gss_release_buffer (&min_stat, &out);
- out:
-	maj_stat = gss_release_name (&min_stat, &gss_name);
-
-	return name;
 }
 
 static gboolean
