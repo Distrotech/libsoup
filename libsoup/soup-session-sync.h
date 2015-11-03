@@ -33,10 +33,13 @@ typedef struct {
 	void (*_libsoup_reserved4) (void);
 } SoupSessionSyncClass;
 
+SOUP_DEPRECATED_IN_2_42
 GType soup_session_sync_get_type (void);
 
 #ifndef SOUP_DISABLE_DEPRECATED
+SOUP_DEPRECATED_IN_2_42
 SoupSession *soup_session_sync_new              (void);
+SOUP_DEPRECATED_IN_2_42
 SoupSession *soup_session_sync_new_with_options (const char *optname1,
 						 ...) G_GNUC_NULL_TERMINATED;
 #endif

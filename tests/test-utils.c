@@ -613,6 +613,18 @@ cancel_request_thread (gpointer data)
 	return NULL;
 }
 
+static gboolean
+is_session_sync(SoupSession *session)
+{
+	gboolean is_sync = FALSE;
+
+	G_GNUC_BEGIN_IGNORE_DEPRECATIONS;
+	is_sync = SOUP_IS_SESSION_SYNC (session);
+	G_GNUC_END_IGNORE_DEPRECATIONS;
+
+	return is_sync;
+}
+
 GInputStream *
 soup_test_request_send (SoupRequest   *req,
 			GCancellable  *cancellable,
@@ -623,7 +635,7 @@ soup_test_request_send (SoupRequest   *req,
 	GInputStream *stream;
 	CancelData *cancel_data = create_cancel_data (req, cancellable, flags);
 
-	if (SOUP_IS_SESSION_SYNC (soup_request_get_session (req))) {
+	if (is_session_sync (soup_request_get_session (req))) {
 		GThread *thread;
 
 		if (cancel_data)
@@ -674,11 +686,11 @@ soup_test_request_read_all (SoupRequest   *req,
 	AsyncAsSyncData data;
 	gsize nread;
 
-	if (!SOUP_IS_SESSION_SYNC (soup_request_get_session (req)))
+	if (!is_session_sync (soup_request_get_session (req)))
 		data.loop = g_main_loop_new (g_main_context_get_thread_default (), FALSE);
 
 	do {
-		if (SOUP_IS_SESSION_SYNC (soup_request_get_session (req))) {
+		if (is_session_sync (soup_request_get_session (req))) {
 			nread = g_input_stream_read (stream, buf, sizeof (buf),
 						     cancellable, error);
 		} else {
@@ -691,7 +703,7 @@ soup_test_request_read_all (SoupRequest   *req,
 		}
 	} while (nread > 0);
 
-	if (!SOUP_IS_SESSION_SYNC (soup_request_get_session (req)))
+	if (!is_session_sync (soup_request_get_session (req)))
 		g_main_loop_unref (data.loop);
 
 	return nread == 0;
@@ -706,7 +718,7 @@ soup_test_request_close_stream (SoupRequest   *req,
 	AsyncAsSyncData data;
 	gboolean ok;
 
-	if (SOUP_IS_SESSION_SYNC (soup_request_get_session (req)))
+	if (is_session_sync (soup_request_get_session (req)))
 		return g_input_stream_close (stream, cancellable, error);
 
 	data.loop = g_main_loop_new (g_main_context_get_thread_default (), FALSE);

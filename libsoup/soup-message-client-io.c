@@ -147,15 +147,20 @@ soup_message_send_request (SoupMessageQueueItem      *item,
 			   SoupMessageCompletionFn    completion_cb,
 			   gpointer                   user_data)
 {
-	GMainContext *async_context;
+	gboolean is_sync = FALSE;
+	GMainContext *async_context = NULL;
 	GIOStream *iostream;
 
-	if (!SOUP_IS_SESSION_SYNC (item->session)) {
+	G_GNUC_BEGIN_IGNORE_DEPRECATIONS
+	is_sync = SOUP_IS_SESSION_SYNC (item->session);
+	G_GNUC_END_IGNORE_DEPRECATIONS
+
+	if (!is_sync) {
 		async_context = soup_session_get_async_context (item->session);
 		if (!async_context)
 			async_context = g_main_context_default ();
-	} else
-		async_context = NULL;
+	}
+
 	iostream = soup_socket_get_iostream (soup_connection_get_socket (item->conn));
 
 	soup_message_io_client (item, iostream, async_context,

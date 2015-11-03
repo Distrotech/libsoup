@@ -2480,11 +2480,16 @@ static void
 soup_session_real_flush_queue (SoupSession *session)
 {
 	SoupSessionPrivate *priv = SOUP_SESSION_GET_PRIVATE (session);
+	gboolean is_sync;
 	SoupMessageQueueItem *item;
 	GHashTable *current = NULL;
 	gboolean done = FALSE;
 
-	if (SOUP_IS_SESSION_SYNC (session)) {
+	G_GNUC_BEGIN_IGNORE_DEPRECATIONS;
+	is_sync = SOUP_IS_SESSION_SYNC (session);
+	G_GNUC_END_IGNORE_DEPRECATIONS;
+
+	if (is_sync) {
 		/* Record the current contents of the queue */
 		current = g_hash_table_new (NULL, NULL);
 		for (item = soup_message_queue_first (priv->queue);
@@ -2501,7 +2506,7 @@ soup_session_real_flush_queue (SoupSession *session)
 					     SOUP_STATUS_CANCELLED);
 	}
 
-	if (SOUP_IS_SESSION_SYNC (session)) {
+	if (is_sync) {
 		/* Wait until all of the items in @current have been
 		 * removed from the queue. (This is not the same as
 		 * "wait for the queue to be empty", because the app

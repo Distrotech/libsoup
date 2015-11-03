@@ -105,7 +105,9 @@ soup_request_http_send (SoupRequest          *request,
 	SoupRequestHTTP *http = SOUP_REQUEST_HTTP (request);
 	SoupSession *session = soup_request_get_session (request);
 
+	G_GNUC_BEGIN_IGNORE_DEPRECATIONS;
 	g_return_val_if_fail (!SOUP_IS_SESSION_ASYNC (session), NULL);
+	G_GNUC_END_IGNORE_DEPRECATIONS;
 
 	return soup_session_send (session, http->priv->msg,
 				  cancellable, error);
@@ -137,7 +139,9 @@ soup_request_http_send_async (SoupRequest          *request,
 	SoupSession *session = soup_request_get_session (request);
 	GTask *task;
 
+	G_GNUC_BEGIN_IGNORE_DEPRECATIONS;
 	g_return_if_fail (!SOUP_IS_SESSION_SYNC (session));
+	G_GNUC_END_IGNORE_DEPRECATIONS;
 
 	task = g_task_new (request, cancellable, callback, user_data);
 	soup_session_send_async (session, http->priv->msg, cancellable,
